@@ -297,4 +297,3 @@ const RETRY_DELAY_MS = 3000;
   }
   console.error('MCP Bridge init failed after all retries');
 })();
-})();
