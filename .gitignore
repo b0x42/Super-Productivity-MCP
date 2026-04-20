@@ -10,3 +10,4 @@ coverage/
 *.tsbuildinfo
 .vscode/
 .idea/
+.kiro/
