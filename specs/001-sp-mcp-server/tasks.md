@@ -129,12 +129,12 @@
 
 **Purpose**: The Super Productivity plugin that executes commands against PluginAPI
 
-- [ ] T032 Create plugin manifest in plugin/manifest.json — id: sp-mcp-bridge, manifestVersion: 1, minSupVersion: 14.0.0, permissions: [nodeExecution], hooks: [taskUpdate, taskComplete, taskDelete, currentTaskChange], iFrame: true, isSkipMenuEntry: true
-- [ ] T033 Implement plugin core in plugin/plugin.js — directory discovery (same probe logic as server), command polling loop (2s default, configurable), command dispatch switch for all actions (addTask, getTasks, updateTask, setTaskDone, getAllProjects, addProject, updateProject, getAllTags, addTag, updateTag, showSnack, ping), response writing, command file cleanup, stale file cleanup on init, protocol version validation, error handling for unknown actions and invalid JSON
-- [ ] T034 Implement subtask SP syntax workaround in plugin/plugin.js — detect parentId + @/#/+ in title, create with clean title, then updateTask with original title
-- [ ] T035 Implement archived task support in plugin/plugin.js — when getTasks command has filters.includeArchived, call both PluginAPI.getTasks() and PluginAPI.getArchivedTasks(), merge results
-- [ ] T036 [P] Create minimal plugin/index.html — empty dashboard placeholder for v1
-- [ ] T037 [P] Create plugin build script in package.json — zip plugin/manifest.json + plugin/plugin.js + plugin/index.html into dist/plugin.zip
+- [x] T032 Create plugin manifest in plugin/manifest.json — id: sp-mcp-bridge, manifestVersion: 1, minSupVersion: 14.0.0, permissions: [nodeExecution], hooks: [taskUpdate, taskComplete, taskDelete, currentTaskChange], iFrame: true, isSkipMenuEntry: true
+- [x] T033 Implement plugin core in plugin/plugin.js — directory discovery (same probe logic as server), command polling loop (2s default, configurable), command dispatch switch for all actions (addTask, getTasks, updateTask, setTaskDone, getAllProjects, addProject, updateProject, getAllTags, addTag, updateTag, showSnack, ping), response writing, command file cleanup, stale file cleanup on init, protocol version validation, error handling for unknown actions and invalid JSON
+- [x] T034 Implement subtask SP syntax workaround in plugin/plugin.js — detect parentId + @/#/+ in title, create with clean title, then updateTask with original title
+- [x] T035 Implement archived task support in plugin/plugin.js — when getTasks command has filters.includeArchived, call both PluginAPI.getTasks() and PluginAPI.getArchivedTasks(), merge results
+- [x] T036 [P] Create minimal plugin/index.html — empty dashboard placeholder for v1
+- [x] T037 [P] Create plugin build script in package.json — zip plugin/manifest.json + plugin/plugin.js + plugin/index.html into dist/plugin.zip
 
 **Checkpoint**: Plugin installable in SP, responds to ping, executes all command actions.
 

@@ -1,0 +1,14 @@
+{
+  "id": "sp-mcp-bridge",
+  "name": "MCP Bridge",
+  "description": "Bridge between Super Productivity and MCP servers for AI assistant integration",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "minSupVersion": "14.0.0",
+  "permissions": ["nodeExecution"],
+  "hooks": ["taskUpdate", "taskComplete", "taskDelete", "currentTaskChange"],
+  "iFrame": true,
+  "isSkipMenuEntry": true,
+  "categories": ["integration", "automation"],
+  "tags": ["mcp", "ai", "integration"]
+}
