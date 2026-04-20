@@ -72,8 +72,8 @@
 
 - [x] T021 [P] [US2] Register `create_project`, `get_projects`, `update_project` tools in src/tools/projects.ts — Zod schemas per contract; validate title non-empty for create, project_id non-empty for update; send addProject/getAllProjects/updateProject commands
 - [x] T022 [P] [US2] Register `create_tag`, `get_tags`, `update_tag` tools in src/tools/tags.ts — Zod schemas per contract; validate title non-empty for create, tag_id non-empty for update; send addTag/getAllTags/updateTag commands
-- [ ] T023 [P] [US2] Write unit tests for project tools in tests/unit/tools/projects.test.ts — mock command-sender, test create/list/update, test input validation
-- [ ] T024 [P] [US2] Write unit tests for tag tools in tests/unit/tools/tags.test.ts — mock command-sender, test create/list/update, test input validation
+- [x] T023 [P] [US2] Write unit tests for project tools in tests/unit/tools/projects.test.ts — mock command-sender, test create/list/update, test input validation
+- [x] T024 [P] [US2] Write unit tests for tag tools in tests/unit/tools/tags.test.ts — mock command-sender, test create/list/update, test input validation
 
 **Checkpoint**: Project and tag management fully functional alongside task CRUD.
 
@@ -89,7 +89,7 @@
 
 - [x] T025 [US3] Register `check_connection` tool in src/tools/diagnostics.ts — no input params; send ping command with short timeout (5s); return plugin version, protocol version, data paths on success; return clear error message on timeout (FR-012, IX)
 - [x] T026 [US3] Register `debug_directories` tool in src/tools/diagnostics.ts — no IPC needed; return resolved base/command/response dirs and existence status from directories.ts (FR-013)
-- [ ] T027 [P] [US3] Write unit tests for diagnostic tools in tests/unit/tools/diagnostics.test.ts — test ping success/timeout, test debug_directories output
+- [x] T027 [P] [US3] Write unit tests for diagnostic tools in tests/unit/tools/diagnostics.test.ts — test ping success/timeout, test debug_directories output
 
 **Checkpoint**: Users can verify connection and troubleshoot paths.
 
@@ -104,7 +104,7 @@
 ### Implementation for User Story 4
 
 - [x] T028 [US4] Register `show_notification` tool in src/tools/notifications.ts — Zod schema: message (required string), type (optional enum SUCCESS/INFO/WARNING/ERROR, default INFO); validate message non-empty; send showSnack command
-- [ ] T029 [P] [US4] Write unit tests for notification tool in tests/unit/tools/notifications.test.ts — test with/without type, test empty message validation
+- [x] T029 [P] [US4] Write unit tests for notification tool in tests/unit/tools/notifications.test.ts — test with/without type, test empty message validation
 
 **Checkpoint**: Notifications work end-to-end.
 
