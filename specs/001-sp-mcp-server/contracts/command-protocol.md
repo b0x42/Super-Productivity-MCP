@@ -56,6 +56,7 @@ Version: 1 (protocolVersion field value)
 | `create_tag` | `addTag` | |
 | `update_tag` | `updateTag` | |
 | `show_notification` | `showSnack` | |
+| `get_worklog` | `getTasks` | Server computes metrics from task `timeSpentOnDay`; no new plugin action |
 | `check_connection` | `ping` | Server-side timeout → clear error message |
 | `debug_directories` | — | Server-only, no IPC needed |
 

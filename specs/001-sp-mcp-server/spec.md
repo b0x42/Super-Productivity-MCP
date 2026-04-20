@@ -84,6 +84,22 @@ A user asks the AI to show a notification inside Super Productivity's UI.
 
 ---
 
+### User Story 5 — Worklog and Productivity Metrics (Priority: P5)
+
+A user asks the AI assistant for a summary of their work — how much time they spent today, this week, or on a specific project. The assistant computes this from task time-tracking data.
+
+**Why this priority**: Useful for daily standups, weekly reviews, and time reporting. Builds on existing task data without new Plugin API calls.
+
+**Independent Test**: Create tasks with time spent, ask for a worklog summary for today, verify the totals match.
+
+**Acceptance Scenarios**:
+
+1. **Given** tasks have time tracked via `timeSpentOnDay`, **When** the user asks "how much time did I work today", **Then** the AI returns total time spent today across all tasks, broken down by project.
+2. **Given** tasks span multiple days, **When** the user asks "show me my worklog for this week", **Then** the AI returns daily totals and a weekly summary with per-project breakdown.
+3. **Given** tasks have time estimates, **When** the user asks "how accurate are my time estimates", **Then** the AI returns estimate vs actual comparison for completed tasks in the date range.
+
+---
+
 ### Edge Cases
 
 - What happens when the user creates a task with an empty title? The system rejects it with a clear error.
@@ -118,6 +134,7 @@ A user asks the AI to show a notification inside Super Productivity's UI.
 - **FR-020**: System MUST clean up stale command/response files on startup and orphaned command files on timeout.
 - **FR-021**: The SP plugin MUST poll for new command files every 2 seconds by default. The polling interval MUST be configurable by the user via plugin settings.
 - **FR-022**: IPC directories MUST be created with user-only permissions (700 for directories, 600 for files) to prevent other users on shared machines from reading task data.
+- **FR-023**: System MUST provide a worklog tool that returns time spent per day, per project, and per tag for a given date range. It MUST also return task completion counts and estimate-vs-actual accuracy for completed tasks in the range. The data is computed server-side from task `timeSpentOnDay` fields.
 
 ### Key Entities
 

@@ -79,6 +79,9 @@ interface Task {
   tagIds: string[];
   parentId?: string | null;
   subTaskIds: string[];
+  timeSpentOnDay?: {          // Map of ISO date string → milliseconds
+    [date: string]: number;   // e.g., { "2026-04-20": 3600000 }
+  };
   created: number;
   updated?: number;
 }
