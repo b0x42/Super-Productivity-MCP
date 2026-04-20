@@ -54,9 +54,9 @@ Per plan.md project structure:
 
 **Independent Test**: Call `get_tasks` with `parents_only=true` — verify no tasks have a `parentId`. Call with `overdue=true` — verify all returned tasks have `dueDay < today`. Call with `parents_only=true, unscheduled=true` — verify intersection only. Call with `overdue=true, unscheduled=true` — verify empty result.
 
-- [ ] T008 [US2] Add `parents_only`, `overdue`, `unscheduled` input params to `get_tasks` tool in `src/tools/tasks.ts` and pass them through to the filter object sent with the `getTasks` command
-- [ ] T009 [US2] Implement `parentsOnly`, `overdue`, `unscheduled` post-fetch filter logic in the `get_tasks` handler in `src/tools/tasks.ts`: `parentsOnly` → exclude `task.parentId !== null`; `overdue` → `task.dueDay < todayLocalDate`; `unscheduled` → `!task.dueDay && !task.dueWithTime`; use `new Date().toISOString().slice(0, 10)` for local date comparison
-- [ ] T010 [P] [US2] Write unit tests for US2 triage filter combinations in `tests/unit/tools/tasks.test.ts`: cover each filter individually + AND combinations + overdue+unscheduled empty case
+- [x] T008 [US2] Add `parents_only`, `overdue`, `unscheduled` input params to `get_tasks` tool in `src/tools/tasks.ts` and pass them through to the filter object sent with the `getTasks` command
+- [x] T009 [US2] Implement `parentsOnly`, `overdue`, `unscheduled` post-fetch filter logic in the `get_tasks` handler in `src/tools/tasks.ts`: `parentsOnly` → exclude `task.parentId !== null`; `overdue` → `task.dueDay < todayLocalDate`; `unscheduled` → `!task.dueDay && !task.dueWithTime`; use `new Date().toISOString().slice(0, 10)` for local date comparison
+- [x] T010 [P] [US2] Write unit tests for US2 triage filter combinations in `tests/unit/tools/tasks.test.ts`: cover each filter individually + AND combinations + overdue+unscheduled empty case
 
 **Checkpoint**: Triage filters functional. An agent can retrieve only triage-relevant tasks in a single `get_tasks` call.
 
