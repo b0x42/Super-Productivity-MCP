@@ -87,9 +87,19 @@ Include these in task titles and SP will parse them automatically:
 
 ### Mac App Store (Sandbox Path Mismatch)
 
-When SP is installed from the Mac App Store, it runs in a sandbox. The plugin resolves its data directory relative to the sandbox home (`~/Library/Containers/com.superproductivity.app/Data/...`), but the MCP server runs outside the sandbox and may resolve to a different path (e.g. `~/.local/share/super-productivity-mcp`).
+When SP is installed from the Mac App Store, it runs in a sandbox. The MCP server and the SP plugin resolve the shared data directory independently, and they can disagree on the path. Either side may resolve to the sandbox path (`~/Library/Containers/com.superproductivity.app/Data/Library/Application Support/super-productivity-mcp`) or the non-sandbox path (`~/.local/share/super-productivity-mcp`).
 
-If commands time out, set `SP_MCP_DATA_DIR` to the sandbox path:
+**Known limitation:** There is no reliable way to auto-detect which path the plugin is actually using. If commands time out despite the plugin being enabled, the server and plugin are likely writing to different directories.
+
+**To diagnose**, ask your AI assistant: *"Show debug info for Super Productivity"* — then check which directory actually contains response files:
+
+```bash
+# Check which directory the plugin is writing to:
+ls -lt ~/.local/share/super-productivity-mcp/plugin_responses/ | head -5
+ls -lt ~/Library/Containers/com.superproductivity.app/Data/Library/Application\ Support/super-productivity-mcp/plugin_responses/ | head -5
+```
+
+**To fix**, set `SP_MCP_DATA_DIR` to whichever path the plugin is actually using:
 
 ```json
 {
@@ -98,9 +108,19 @@ If commands time out, set `SP_MCP_DATA_DIR` to the sandbox path:
       "command": "npx",
       "args": ["-y", "super-productivity-mcp"],
       "env": {
-        "SP_MCP_DATA_DIR": "~/Library/Containers/com.superproductivity.app/Data/Library/Application Support/super-productivity-mcp"
+        "SP_MCP_DATA_DIR": "~/.local/share/super-productivity-mcp"
       }
     }
+  }
+}
+```
+
+Or, if the plugin is using the sandbox path:
+
+```json
+{
+  "env": {
+    "SP_MCP_DATA_DIR": "~/Library/Containers/com.superproductivity.app/Data/Library/Application Support/super-productivity-mcp"
   }
 }
 ```
