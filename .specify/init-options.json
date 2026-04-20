@@ -1,0 +1,10 @@
+{
+  "ai": "kiro-cli",
+  "branch_numbering": "sequential",
+  "context_file": "AGENTS.md",
+  "here": true,
+  "integration": "kiro-cli",
+  "preset": null,
+  "script": "sh",
+  "speckit_version": "0.7.3"
+}
