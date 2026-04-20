@@ -110,29 +110,31 @@ async function executeCommand(command) {
         const d = command.data || {};
         const title = d.title || '';
 
-        // Parse @date syntax since PluginAPI.addTask doesn't process short syntax
+        // Parse @date syntax since PluginAPI.addTask doesn't process short syntax.
+        // Use local date formatting (not toISOString which converts to UTC and shifts the day in positive timezones).
         const dateMatch = title.match(/@(\S+)(?:\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i);
         let dueDay = null;
+        const localDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         if (dateMatch) {
           const keyword = dateMatch[1].toLowerCase();
           const now = new Date();
           const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           if (keyword === 'today' || keyword === '0days') {
-            dueDay = today.toISOString().slice(0, 10);
+            dueDay = localDateStr(today);
           } else if (keyword === 'tomorrow' || keyword === '1days') {
             today.setDate(today.getDate() + 1);
-            dueDay = today.toISOString().slice(0, 10);
+            dueDay = localDateStr(today);
           } else if (/^\d+days?$/.test(keyword)) {
             const days = parseInt(keyword);
             today.setDate(today.getDate() + days);
-            dueDay = today.toISOString().slice(0, 10);
+            dueDay = localDateStr(today);
           } else {
             const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
             const idx = dayNames.indexOf(keyword);
             if (idx !== -1) {
               const diff = (idx - now.getDay() + 7) % 7 || 7;
               today.setDate(today.getDate() + diff);
-              dueDay = today.toISOString().slice(0, 10);
+              dueDay = localDateStr(today);
             }
           }
         }

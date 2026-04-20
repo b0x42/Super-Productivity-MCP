@@ -82,6 +82,30 @@ describe('task tool logic', () => {
         data: expect.objectContaining({ isDone: true, doneOn: expect.any(Number) }),
       }));
     });
+
+    it('sends updateTask with dueDay and plannedAt together', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await sendCommand(dirs, 'updateTask', {
+        taskId: 'task-1',
+        data: { dueDay: '2026-04-20', plannedAt: 1745150400000 },
+      });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
+        taskId: 'task-1',
+        data: expect.objectContaining({ dueDay: '2026-04-20', plannedAt: expect.any(Number) }),
+      }));
+    });
+
+    it('clears dueDay and plannedAt together', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await sendCommand(dirs, 'updateTask', {
+        taskId: 'task-1',
+        data: { dueDay: null, plannedAt: null },
+      });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
+        taskId: 'task-1',
+        data: { dueDay: null, plannedAt: null },
+      }));
+    });
   });
 
   describe('complete_task via sendCommand', () => {
