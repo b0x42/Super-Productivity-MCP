@@ -68,13 +68,13 @@ Per plan.md project structure:
 
 **Independent Test**: Move a task to a new project — verify `task.projectId` changed. Reorder 3 tasks — verify SP displays them in the specified order. Start a timer on a task, call `get_current_task` — verify correct task returned. Stop timer, call again — verify null.
 
-- [ ] T011 [P] [US3] Fix `persistDataSynced` two-arg bug and add `loadCurrentTask` handler in `plugin/plugin.js`: fix existing `persistDataSynced('currentTask', taskData)` → `persistDataSynced(JSON.stringify(taskData || null))`; add handler that calls `loadSyncedData()`, parses JSON, returns task or null
-- [ ] T012 [P] [US3] Add `moveTaskToProject` command handler in `plugin/plugin.js`: validate `task.parentId === null` (error otherwise), call `updateTask({ projectId: newProjectId })`; validate project exists
-- [ ] T013 [P] [US3] Add `reorderTasks` command handler in `plugin/plugin.js`: validate all `taskIds` belong to `contextId` (error on any foreign ID), call `PluginAPI.reorderTasks(taskIds, contextId, contextType)`
-- [ ] T014 [P] [US3] Add `get_current_task` tool to `registerTaskTools` in `src/tools/tasks.ts`: no inputs; sends `loadCurrentTask` command; returns task object or null
-- [ ] T015 [P] [US3] Add `move_task_to_project` tool to `registerTaskTools` in `src/tools/tasks.ts`: inputs `task_id`, `project_id`; sends `moveTaskToProject` command
-- [ ] T016 [P] [US3] Add `reorder_tasks` tool to `registerTaskTools` in `src/tools/tasks.ts`: inputs `task_ids` (array), `context_id`, `context_type` (enum `project`/`parent`); sends `reorderTasks` command
-- [ ] T017 [P] [US3] Write unit tests for US3 organisation operations in `tests/unit/tools/tasks.test.ts`: cover move (success + subtask error), reorder (success + foreign-id error), get_current_task (active + null)
+- [x] T011 [P] [US3] Fix `persistDataSynced` two-arg bug and add `loadCurrentTask` handler in `plugin/plugin.js`: fix existing `persistDataSynced('currentTask', taskData)` → `persistDataSynced(JSON.stringify(taskData || null))`; add handler that calls `loadSyncedData()`, parses JSON, returns task or null
+- [x] T012 [P] [US3] Add `moveTaskToProject` command handler in `plugin/plugin.js`: validate `task.parentId === null` (error otherwise), call `updateTask({ projectId: newProjectId })`; validate project exists
+- [x] T013 [P] [US3] Add `reorderTasks` command handler in `plugin/plugin.js`: validate all `taskIds` belong to `contextId` (error on any foreign ID), call `PluginAPI.reorderTasks(taskIds, contextId, contextType)`
+- [x] T014 [P] [US3] Add `get_current_task` tool to `registerTaskTools` in `src/tools/tasks.ts`: no inputs; sends `loadCurrentTask` command; returns task object or null
+- [x] T015 [P] [US3] Add `move_task_to_project` tool to `registerTaskTools` in `src/tools/tasks.ts`: inputs `task_id`, `project_id`; sends `moveTaskToProject` command
+- [x] T016 [P] [US3] Add `reorder_tasks` tool to `registerTaskTools` in `src/tools/tasks.ts`: inputs `task_ids` (array), `context_id`, `context_type` (enum `project`/`parent`); sends `reorderTasks` command
+- [x] T017 [P] [US3] Write unit tests for US3 organisation operations in `tests/unit/tools/tasks.test.ts`: cover move (success + subtask error), reorder (success + foreign-id error), get_current_task (active + null)
 
 **Checkpoint**: All 9 operations from spec.md SC-003 are implemented and independently testable.
 
