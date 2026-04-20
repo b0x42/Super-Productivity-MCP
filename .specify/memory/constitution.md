@@ -55,7 +55,7 @@ Rationale: MCP compliance ensures the server works with any MCP client (Claude D
 
 The data directory MUST be resolved per platform:
 - **macOS**: `~/Library/Application Support/super-productivity-mcp/`
-- **macOS (App Store sandbox)**: `~/Library/Containers/com.superproductivity.app/Data/Library/Application Support/super-productivity-mcp/`
+- **macOS (App Store sandbox)**: `~/Library/Containers/com.super-productivity.app/Data/Library/Application Support/super-productivity-mcp/`
 - **macOS (Homebrew)**: `~/Library/Application Support/super-productivity-mcp/`
 - **Linux**: `$XDG_DATA_HOME/super-productivity-mcp/` (default `~/.local/share/super-productivity-mcp/`)
 - **Linux (Snap)**: `~/snap/superproductivity/current/.local/share/super-productivity-mcp/`

@@ -1,4 +1,4 @@
 {
-  "integration": "kiro-cli",
-  "version": "0.7.3"
+  "integration": "claude",
+  "version": "0.7.4.dev0"
 }
