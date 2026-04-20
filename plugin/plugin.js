@@ -260,32 +260,41 @@ async function pollCommands() {
   }
 }
 
-// Initialize
+// Initialize with retry — nodeExecution permission may not be ready on first plugin activation
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 3000;
+
 (async () => {
-  try {
-    await setupDirectories();
-    // FR-020: Clean stale files on startup (>5min old)
-    await PluginAPI.executeNodeScript({
-      script: `
-        const fs = require('fs');
-        const path = require('path');
-        const now = Date.now();
-        for (const dir of [args[0], args[1]]) {
-          try {
-            for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json'))) {
-              const fp = path.join(dir, f);
-              if (now - fs.statSync(fp).mtimeMs > 300000) fs.unlinkSync(fp);
-            }
-          } catch (e) {}
-        }
-        return { success: true };
-      `,
-      args: [commandDir, responseDir],
-      timeout: 5000,
-    });
-    pollTimer = setInterval(pollCommands, POLL_INTERVAL_MS);
-    console.log('MCP Bridge Plugin initialized');
-  } catch (e) {
-    console.error('MCP Bridge init failed:', e);
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await setupDirectories();
+      // FR-020: Clean stale files on startup (>5min old)
+      await PluginAPI.executeNodeScript({
+        script: `
+          const fs = require('fs');
+          const path = require('path');
+          const now = Date.now();
+          for (const dir of [args[0], args[1]]) {
+            try {
+              for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json'))) {
+                const fp = path.join(dir, f);
+                if (now - fs.statSync(fp).mtimeMs > 300000) fs.unlinkSync(fp);
+              }
+            } catch (e) {}
+          }
+          return { success: true };
+        `,
+        args: [commandDir, responseDir],
+        timeout: 5000,
+      });
+      pollTimer = setInterval(pollCommands, POLL_INTERVAL_MS);
+      console.log('MCP Bridge Plugin initialized');
+      return;
+    } catch (e) {
+      console.error(`MCP Bridge init attempt ${attempt}/${MAX_RETRIES} failed:`, e);
+      if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+    }
   }
+  console.error('MCP Bridge init failed after all retries');
+})();
 })();
