@@ -22,7 +22,7 @@ function errorResult(msg: string) {
 }
 
 function okResult(data: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(data ?? null, null, 2) }] };
 }
 
 export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
@@ -112,11 +112,12 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         title: z.string().optional().describe('New title (may include SP short syntax)'),
         notes: z.string().optional().describe('New notes'),
         is_done: z.boolean().optional().describe('Mark as done/undone'),
+        due_day: z.string().optional().describe('Due date in ISO format (e.g. 2026-04-20), or empty string to clear'),
         time_estimate: z.number().optional().describe('Time estimate in milliseconds'),
         time_spent: z.number().optional().describe('Time spent in milliseconds'),
       },
     },
-    async ({ task_id, title, notes, is_done, time_estimate, time_spent }) => {
+    async ({ task_id, title, notes, is_done, due_day, time_estimate, time_spent }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
 
       const data: Record<string, unknown> = {};
@@ -126,6 +127,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         data.isDone = is_done;
         data.doneOn = is_done ? Date.now() : null;
       }
+      if (due_day !== undefined) data.dueDay = due_day || null;
       if (time_estimate !== undefined) data.timeEstimate = time_estimate;
       if (time_spent !== undefined) data.timeSpent = time_spent;
 

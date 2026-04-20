@@ -7,7 +7,7 @@ function errorResult(msg: string) {
   return { content: [{ type: 'text' as const, text: JSON.stringify({ error: msg }) }], isError: true };
 }
 function okResult(data: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(data ?? null, null, 2) }] };
 }
 
 export function registerTagTools(server: McpServer, dirs: ResolvedDirs): void {
