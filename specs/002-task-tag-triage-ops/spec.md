@@ -77,7 +77,7 @@ An AI agent or user wants to move a task to a different project, reorder tasks w
 - **FR-005**: get_tasks MUST support an overdue filter that returns only tasks with a due date strictly before today's date
 - **FR-006**: get_tasks MUST support an unscheduled filter that returns only tasks with no due date and no scheduled time
 - **FR-007**: All triage filters MUST be combinable with each other and with existing filters using AND logic
-- **FR-008**: System MUST allow moving a top-level task to a different project
+- **FR-008**: System MUST allow moving a top-level task to a different project; system MUST return an error if called on a subtask
 - **FR-009**: System MUST allow reordering tasks within a project, or subtasks within a parent task, using a provided ordered list of task IDs
 - **FR-010**: System MUST expose the currently time-tracked task, returning null when no task has an active timer
 
