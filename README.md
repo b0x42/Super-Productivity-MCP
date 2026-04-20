@@ -85,9 +85,29 @@ Include these in task titles and SP will parse them automatically:
 
 ## Troubleshooting
 
+### Mac App Store (Sandbox Path Mismatch)
+
+When SP is installed from the Mac App Store, it runs in a sandbox. The plugin resolves its data directory relative to the sandbox home (`~/Library/Containers/com.superproductivity.app/Data/...`), but the MCP server runs outside the sandbox and may resolve to a different path (e.g. `~/.local/share/super-productivity-mcp`).
+
+If commands time out, set `SP_MCP_DATA_DIR` to the sandbox path:
+
+```json
+{
+  "mcpServers": {
+    "super-productivity": {
+      "command": "npx",
+      "args": ["-y", "super-productivity-mcp"],
+      "env": {
+        "SP_MCP_DATA_DIR": "~/Library/Containers/com.superproductivity.app/Data/Library/Application Support/super-productivity-mcp"
+      }
+    }
+  }
+}
+```
+
 ### Custom Data Directory
 
-If SP is installed via Snap or Mac App Store, the plugin auto-detects the correct path. To override:
+To override the auto-detected path for any reason:
 
 ```json
 {
@@ -106,7 +126,8 @@ If SP is installed via Snap or Mac App Store, the plugin auto-detects the correc
 1. Ensure Super Productivity is running
 2. Verify the MCP Bridge plugin is enabled (Settings → Plugins)
 3. Ask: *"Show debug info for Super Productivity"* to check directory paths
-4. Restart both SP and your MCP client
+4. If paths differ between server and plugin, set `SP_MCP_DATA_DIR` (see above)
+5. Restart both SP and your MCP client
 
 ## Development
 
