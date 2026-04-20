@@ -22,8 +22,9 @@ interface Command {
 interface TaskFilters {
   projectId?: string;
   tagId?: string;
-  includeDone?: boolean;  // Default: false
-  searchQuery?: string;   // Case-insensitive title match
+  includeDone?: boolean;     // Default: false
+  includeArchived?: boolean; // Default: false — when true, also fetches archived tasks
+  searchQuery?: string;      // Case-insensitive title match
 }
 ```
 

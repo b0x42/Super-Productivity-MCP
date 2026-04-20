@@ -46,7 +46,7 @@ Version: 1 (protocolVersion field value)
 | MCP Tool | Command Action | Notes |
 |----------|---------------|-------|
 | `create_task` | `addTask` | Plugin uses two-step workaround for subtasks with SP syntax |
-| `get_tasks` | `getTasks` | Plugin returns all tasks; server filters by `filters` |
+| `get_tasks` | `getTasks` | Plugin returns tasks (+ archived if requested); server filters by `filters` |
 | `update_task` | `updateTask` | |
 | `complete_task` | `setTaskDone` | |
 | `get_projects` | `getAllProjects` | |
@@ -87,3 +87,4 @@ Standard error messages:
 - Adding new optional fields to existing actions: no version bump
 - Adding new actions: no version bump (plugin returns "Unknown command action" for unrecognized actions)
 - Changing semantics of existing actions or adding required fields: version bump required
+ired

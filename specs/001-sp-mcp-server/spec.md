@@ -97,7 +97,7 @@ A user asks the AI to show a notification inside Super Productivity's UI.
 ### Functional Requirements
 
 - **FR-001**: System MUST allow creating tasks with a title, optional notes, optional project assignment, optional parent task, and optional tag IDs.
-- **FR-002**: System MUST allow listing tasks with optional filters: by project ID, by tag ID, by done status (include/exclude completed), and by title search query. When no filters are provided, all non-done tasks are returned.
+- **FR-002**: System MUST allow listing tasks with optional filters: by project ID, by tag ID, by done status (include/exclude completed), by archived status (include/exclude archived), and by title search query. When no filters are provided, all non-done, non-archived tasks are returned.
 - **FR-003**: System MUST allow updating any mutable task field: title, notes, done status, time estimate, time spent.
 - **FR-004**: System MUST allow marking a task as complete (setting `isDone` and `doneOn`).
 - **FR-005**: System MUST allow creating projects with a title, optional description, and optional color.
