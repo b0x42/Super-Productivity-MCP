@@ -10,7 +10,7 @@ function getCandidatePaths(): string[] {
   switch (platform()) {
     case 'darwin':
       return [
-        join(home, 'Library', 'Containers', 'com.superproductivity.app', 'Data', 'Library', 'Application Support', APP_NAME),
+        join(home, 'Library', 'Containers', 'com.super-productivity.app', 'Data', 'Library', 'Application Support', APP_NAME),
         join(home, 'Library', 'Application Support', APP_NAME),
       ];
     case 'win32':
