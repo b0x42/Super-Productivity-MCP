@@ -51,12 +51,12 @@
 
 ### Implementation for User Story 1
 
-- [ ] T015 [US1] Register `create_task` tool in src/tools/tasks.ts — Zod schema: title (required string), notes (optional), project_id (optional), parent_id (optional), tag_ids (optional string array); validate title non-empty (FR-024); send addTask command; document SP short syntax in tool description (FR-015)
-- [ ] T016 [US1] Implement subtask SP syntax workaround in src/tools/tasks.ts — when parent_id is set and title contains @/#/+, strip syntax for addTask then updateTask with original title (FR-016)
-- [ ] T017 [US1] Register `get_tasks` tool in src/tools/tasks.ts — Zod schema: project_id (optional), tag_id (optional), include_done (optional bool, default false), include_archived (optional bool, default false), search_query (optional string); send getTasks command; apply server-side filtering on response (FR-002)
-- [ ] T018 [US1] Register `update_task` tool in src/tools/tasks.ts — Zod schema: task_id (required), title (optional), notes (optional), is_done (optional bool), time_estimate (optional number), time_spent (optional number); validate task_id non-empty (FR-024); send updateTask command
-- [ ] T019 [US1] Register `complete_task` tool in src/tools/tasks.ts — Zod schema: task_id (required); validate task_id non-empty; send setTaskDone command (FR-004)
-- [ ] T020 [P] [US1] Write unit tests for task tools in tests/unit/tools/tasks.test.ts — mock command-sender, test create (with/without SP syntax, with parent_id workaround), get (all filter combinations), update, complete; test input validation rejects empty title/id with isError:true (FR-025)
+- [x] T015 [US1] Register `create_task` tool in src/tools/tasks.ts — Zod schema: title (required string), notes (optional), project_id (optional), parent_id (optional), tag_ids (optional string array); validate title non-empty (FR-024); send addTask command; document SP short syntax in tool description (FR-015)
+- [x] T016 [US1] Implement subtask SP syntax workaround in src/tools/tasks.ts — when parent_id is set and title contains @/#/+, strip syntax for addTask then updateTask with original title (FR-016)
+- [x] T017 [US1] Register `get_tasks` tool in src/tools/tasks.ts — Zod schema: project_id (optional), tag_id (optional), include_done (optional bool, default false), include_archived (optional bool, default false), search_query (optional string); send getTasks command; apply server-side filtering on response (FR-002)
+- [x] T018 [US1] Register `update_task` tool in src/tools/tasks.ts — Zod schema: task_id (required), title (optional), notes (optional), is_done (optional bool), time_estimate (optional number), time_spent (optional number); validate task_id non-empty (FR-024); send updateTask command
+- [x] T019 [US1] Register `complete_task` tool in src/tools/tasks.ts — Zod schema: task_id (required); validate task_id non-empty; send setTaskDone command (FR-004)
+- [x] T020 [P] [US1] Write unit tests for task tools in tests/unit/tools/tasks.test.ts — mock command-sender, test create (with/without SP syntax, with parent_id workaround), get (all filter combinations), update, complete; test input validation rejects empty title/id with isError:true (FR-025)
 
 **Checkpoint**: Task CRUD fully functional. Can create, list, filter, update, and complete tasks via MCP.
 
@@ -118,8 +118,8 @@
 
 ### Implementation for User Story 5
 
-- [ ] T030 [US5] Register `get_worklog` tool in src/tools/tasks.ts — Zod schema: start_date (required string, ISO date), end_date (required string, ISO date); send getTasks command (with includeDone + includeArchived); compute server-side: daily totals, per-project breakdown, per-tag breakdown, tasks completed count, estimate vs actual accuracy (FR-023)
-- [ ] T031 [P] [US5] Write unit tests for worklog tool in tests/unit/tools/tasks.test.ts — mock task data with timeSpentOnDay, test date range filtering, test per-project/tag aggregation, test estimate accuracy calculation
+- [x] T030 [US5] Register `get_worklog` tool in src/tools/tasks.ts — Zod schema: start_date (required string, ISO date), end_date (required string, ISO date); send getTasks command (with includeDone + includeArchived); compute server-side: daily totals, per-project breakdown, per-tag breakdown, tasks completed count, estimate vs actual accuracy (FR-023)
+- [x] T031 [P] [US5] Write unit tests for worklog tool in tests/unit/tools/tasks.test.ts — mock task data with timeSpentOnDay, test date range filtering, test per-project/tag aggregation, test estimate accuracy calculation
 
 **Checkpoint**: Worklog summaries work for any date range.
 
