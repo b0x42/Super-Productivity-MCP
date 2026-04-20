@@ -103,5 +103,5 @@ An AI agent or user wants to move a task to a different project, reorder tasks w
 - reorder_tasks takes a complete ordered list — partial reordering within a larger set is not supported
 - move_task_to_project applies only to top-level tasks; moving subtasks is out of scope
 - get_current_task returns the task with an active running timer, not merely the most recently viewed task
-- The overdue filter uses today's local date as the comparison boundary
+- The overdue filter uses today's date in the user's local timezone as the comparison boundary
 - Combining overdue=true and unscheduled=true returns an empty result set (logically exclusive)
