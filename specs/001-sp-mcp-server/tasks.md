@@ -31,13 +31,13 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T008 Define Command and Response TypeScript interfaces in src/ipc/types.ts per data-model.md (Command, Response, TaskFilters, McpConfig)
-- [ ] T009 Implement cross-platform directory resolution in src/ipc/directories.ts — probe macOS (sandbox, standard), Linux (Snap, XDG, standard), Windows (APPDATA); support SP_MCP_DATA_DIR env override; write mcp_config.json when override is set; create dirs with 700 permissions, files with 600
-- [ ] T010 Implement command-sender in src/ipc/command-sender.ts — write command JSON files, poll for response files with configurable timeout (default 30s), clean up response files after reading, clean up orphaned commands on timeout, clean stale files (>5min) on startup; return clear error message when plugin not responding
-- [ ] T011 Create MCP server entry point in src/server.ts — instantiate McpServer with name "super-productivity" and version from package.json, connect via StdioServerTransport
-- [ ] T012 Create package entry point in src/index.ts — import and run server, add shebang for npx execution
-- [ ] T013 [P] Write unit tests for directory resolution in tests/unit/directories.test.ts — mock os.platform/homedir, test all 6 platform variants, test SP_MCP_DATA_DIR override, test mcp_config.json write
-- [ ] T014 [P] Write unit tests for command-sender in tests/unit/command-sender.test.ts — mock filesystem, test write/poll/cleanup cycle, test timeout with clear error message, test stale file cleanup
+- [x] T008 Define Command and Response TypeScript interfaces in src/ipc/types.ts per data-model.md (Command, Response, TaskFilters, McpConfig)
+- [x] T009 Implement cross-platform directory resolution in src/ipc/directories.ts — probe macOS (sandbox, standard), Linux (Snap, XDG, standard), Windows (APPDATA); support SP_MCP_DATA_DIR env override; write mcp_config.json when override is set; create dirs with 700 permissions, files with 600
+- [x] T010 Implement command-sender in src/ipc/command-sender.ts — write command JSON files, poll for response files with configurable timeout (default 30s), clean up response files after reading, clean up orphaned commands on timeout, clean stale files (>5min) on startup; return clear error message when plugin not responding
+- [x] T011 Create MCP server entry point in src/server.ts — instantiate McpServer with name "super-productivity" and version from package.json, connect via StdioServerTransport
+- [x] T012 Create package entry point in src/index.ts — import and run server, add shebang for npx execution
+- [x] T013 [P] Write unit tests for directory resolution in tests/unit/directories.test.ts — mock os.platform/homedir, test all 6 platform variants, test SP_MCP_DATA_DIR override, test mcp_config.json write
+- [x] T014 [P] Write unit tests for command-sender in tests/unit/command-sender.test.ts — mock filesystem, test write/poll/cleanup cycle, test timeout with clear error message, test stale file cleanup
 
 **Checkpoint**: Foundation ready — `npx tsup` builds, tests pass, server starts and exits cleanly via stdio
 
