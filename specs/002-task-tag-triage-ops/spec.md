@@ -93,7 +93,7 @@ An AI agent or user wants to move a task to a different project, reorder tasks w
 
 - **SC-001**: An agent can retrieve only triage-relevant tasks in a single call using combined filters, with no post-fetch filtering required
 - **SC-002**: Tag add/remove operations preserve all pre-existing tags on the task — zero data loss on existing tag assignments
-- **SC-003**: All 10 new or modified operations return an explicit success or error response with no silent failures
+- **SC-003**: All 9 new or modified operations (add_tag_to_task, remove_tag_from_task, tag_ids in update_task, parents_only filter, overdue filter, unscheduled filter, move_task_to_project, reorder_tasks, get_current_task) return an explicit success or error response with no silent failures
 - **SC-004**: Triage filter combinations (parents_only + overdue, parents_only + unscheduled) return only the intersection of matching tasks
 
 ## Assumptions
