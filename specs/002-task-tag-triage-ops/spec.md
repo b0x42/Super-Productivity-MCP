@@ -20,7 +20,7 @@ An AI agent or user wants to add or remove individual tags from tasks without re
 1. **Given** a task with tags [A, B], **When** add_tag_to_task is called with tag C, **Then** the task has tags [A, B, C]
 2. **Given** a task with tags [A, B, C], **When** remove_tag_from_task is called with tag B, **Then** the task has tags [A, C]
 3. **Given** a task with no tags, **When** add_tag_to_task is called, **Then** the task has exactly that one tag
-4. **Given** a task that does not have tag X, **When** remove_tag_from_task is called with tag X, **Then** the operation returns an appropriate error or completes as a no-op
+4. **Given** a task that does not have tag X, **When** remove_tag_from_task is called with tag X, **Then** the operation returns an error
 5. **Given** a valid update_task call with a tag_ids list, **When** the call completes, **Then** the task's tags are exactly the provided list
 
 ---
