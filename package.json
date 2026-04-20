@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "lint": "eslint src/",
     "prepublishOnly": "npm run build",
-    "build:plugin": "cd plugin && zip -r ../dist/plugin.zip manifest.json plugin.js index.html"
+    "build:plugin": "cd plugin && zip -r ../dist/plugin.zip manifest.json plugin.js index.html icon.svg"
   },
   "files": [
     "dist",

@@ -1,6 +1,12 @@
-# Super Productivity MCP Server
+<p align="center">
+  <img src="plugin/icon.svg" width="128" height="128" alt="SP MCP Bridge icon">
+</p>
 
-An MCP (Model Context Protocol) server that connects AI assistants to [Super Productivity](https://super-productivity.com) — manage tasks, projects, and tags through Claude Desktop, Kiro, or any MCP-compatible client.
+<h1 align="center">Super Productivity MCP Server</h1>
+
+<p align="center">
+An MCP (Model Context Protocol) server that connects AI assistants to <a href="https://super-productivity.com">Super Productivity</a> — manage tasks, projects, and tags through Claude Desktop, Kiro, or any MCP-compatible client.
+</p>
 
 ## Features
 

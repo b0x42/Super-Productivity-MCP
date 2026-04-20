@@ -9,6 +9,7 @@
   "hooks": ["taskUpdate", "taskComplete", "taskDelete", "currentTaskChange"],
   "iFrame": true,
   "isSkipMenuEntry": true,
+  "icon": "icon.svg",
   "categories": ["integration", "automation"],
   "tags": ["mcp", "ai", "integration"]
 }
