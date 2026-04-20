@@ -101,7 +101,7 @@ An AI agent or user wants to move a task to a different project, reorder tasks w
 - add_tag_to_task is idempotent: calling it with a tag already on the task succeeds silently
 - remove_tag_from_task on a tag not present on the task returns an error (not silent)
 - reorder_tasks takes a complete ordered list — partial reordering within a larger set is not supported
-- move_task_to_project applies only to top-level tasks; moving subtasks is out of scope
+- move_task_to_project applies only to top-level tasks; calling it on a subtask returns an error
 - get_current_task returns the task with an active running timer, not merely the most recently viewed task
 - The overdue filter uses today's date in the user's local timezone as the comparison boundary
 - Combining overdue=true and unscheduled=true returns an empty result set (logically exclusive)
