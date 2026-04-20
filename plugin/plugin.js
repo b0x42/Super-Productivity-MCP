@@ -261,10 +261,10 @@ async function pollCommands() {
 }
 
 // Initialize with retry — nodeExecution permission may not be ready on first plugin activation
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 3000;
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 2000;
 
-(async () => {
+async function init() {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       await setupDirectories();
@@ -291,9 +291,14 @@ const RETRY_DELAY_MS = 3000;
       console.log('MCP Bridge Plugin initialized');
       return;
     } catch (e) {
-      console.error(`MCP Bridge init attempt ${attempt}/${MAX_RETRIES} failed:`, e);
-      if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+      console.error('MCP Bridge init attempt ' + attempt + '/' + MAX_RETRIES + ' failed:', e);
+      if (attempt < MAX_RETRIES) {
+        await new Promise(function(r) { setTimeout(r, RETRY_DELAY_MS); });
+      }
     }
   }
   console.error('MCP Bridge init failed after all retries');
-})();
+}
+
+// Delay first attempt to let SP finish granting permissions
+setTimeout(init, 1500);
