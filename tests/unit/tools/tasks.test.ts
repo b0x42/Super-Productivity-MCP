@@ -116,6 +116,157 @@ describe('task tool logic', () => {
     });
   });
 
+  // T007: US1 — tag operations
+  describe('add_tag_to_task via sendCommand', () => {
+    it('sends addTagToTask with taskId and tagId', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      await sendCommand(dirs, 'addTagToTask', { taskId: 'task-1', tagId: 'tag-a' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'addTagToTask', { taskId: 'task-1', tagId: 'tag-a' });
+    });
+
+    it('propagates error when task not found', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Task not found: task-x', timestamp: Date.now() });
+      const res = await sendCommand(dirs, 'addTagToTask', { taskId: 'task-x', tagId: 'tag-a' });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch('Task not found');
+    });
+  });
+
+  describe('remove_tag_from_task via sendCommand', () => {
+    it('sends removeTagFromTask with taskId and tagId', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      await sendCommand(dirs, 'removeTagFromTask', { taskId: 'task-1', tagId: 'tag-a' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'removeTagFromTask', { taskId: 'task-1', tagId: 'tag-a' });
+    });
+
+    it('propagates error when tag not on task', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Tag tag-z not on task task-1', timestamp: Date.now() });
+      const res = await sendCommand(dirs, 'removeTagFromTask', { taskId: 'task-1', tagId: 'tag-z' });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch('not on task');
+    });
+  });
+
+  describe('update_task with tag_ids (bulk replace)', () => {
+    it('sends updateTask with tagIds array', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await sendCommand(dirs, 'updateTask', { taskId: 'task-1', data: { tagIds: ['tag-a', 'tag-b'] } });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
+        data: expect.objectContaining({ tagIds: ['tag-a', 'tag-b'] }),
+      }));
+    });
+
+    it('sends updateTask with empty tagIds to clear all tags', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await sendCommand(dirs, 'updateTask', { taskId: 'task-1', data: { tagIds: [] } });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
+        data: expect.objectContaining({ tagIds: [] }),
+      }));
+    });
+  });
+
+  // T010: US2 — triage filter logic
+  describe('get_tasks triage filters', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+    const tasks = [
+      { id: '1', title: 'Parent overdue', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: yesterday, dueWithTime: null },
+      { id: '2', title: 'Parent unscheduled', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null },
+      { id: '3', title: 'Parent future', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: tomorrow, dueWithTime: null },
+      { id: '4', title: 'Subtask overdue', isDone: false, projectId: null, tagIds: [], parentId: 'task-parent', dueDay: yesterday, dueWithTime: null },
+      { id: '5', title: 'Scheduled today', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: today, dueWithTime: null },
+    ];
+
+    it('parents_only excludes subtasks', () => {
+      const result = tasks.filter(t => !t.parentId);
+      expect(result.every(t => !t.parentId)).toBe(true);
+      expect(result.find(t => t.id === '4')).toBeUndefined();
+    });
+
+    it('overdue returns only tasks with dueDay strictly before today', () => {
+      const result = tasks.filter(t => t.dueDay && t.dueDay < today);
+      expect(result.every(t => t.dueDay! < today)).toBe(true);
+      expect(result.map(t => t.id)).toEqual(expect.arrayContaining(['1', '4']));
+      expect(result.find(t => t.id === '5')).toBeUndefined(); // today is not overdue
+    });
+
+    it('unscheduled returns only tasks with no dueDay and no dueWithTime', () => {
+      const result = tasks.filter(t => !t.dueDay && !t.dueWithTime);
+      expect(result.map(t => t.id)).toEqual(['2']);
+    });
+
+    it('parents_only + unscheduled returns AND intersection', () => {
+      const result = tasks.filter(t => !t.parentId && !t.dueDay && !t.dueWithTime);
+      expect(result.map(t => t.id)).toEqual(['2']);
+    });
+
+    it('overdue + unscheduled returns empty (mutually exclusive)', () => {
+      const result = tasks.filter(t => t.dueDay && t.dueDay < today && !t.dueDay && !t.dueWithTime);
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  // T017: US3 — organisation operations
+  describe('get_current_task via sendCommand', () => {
+    it('returns task object when timer is active', async () => {
+      const task = { id: 'task-1', title: 'Active task' };
+      mockSend.mockResolvedValueOnce(mockResponse(task));
+      const res = await sendCommand(dirs, 'loadCurrentTask', {});
+      expect(res.success).toBe(true);
+      expect(res.result).toEqual(task);
+    });
+
+    it('returns null when no timer is running', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      const res = await sendCommand(dirs, 'loadCurrentTask', {});
+      expect(res.success).toBe(true);
+      expect(res.result).toBeNull();
+    });
+  });
+
+  describe('move_task_to_project via sendCommand', () => {
+    it('sends moveTaskToProject with taskId and projectId', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      await sendCommand(dirs, 'moveTaskToProject', { taskId: 'task-1', projectId: 'proj-b' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'moveTaskToProject', { taskId: 'task-1', projectId: 'proj-b' });
+    });
+
+    it('propagates error when task is a subtask', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Cannot move subtask: task-1 has parentId parent-x', timestamp: Date.now() });
+      const res = await sendCommand(dirs, 'moveTaskToProject', { taskId: 'task-1', projectId: 'proj-b' });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch('Cannot move subtask');
+    });
+
+    it('propagates error when project not found', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Project not found: proj-x', timestamp: Date.now() });
+      const res = await sendCommand(dirs, 'moveTaskToProject', { taskId: 'task-1', projectId: 'proj-x' });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch('Project not found');
+    });
+  });
+
+  describe('reorder_tasks via sendCommand', () => {
+    it('sends reorderTasks with taskIds, contextId, contextType', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      await sendCommand(dirs, 'reorderTasks', { taskIds: ['t3', 't1', 't2'], contextId: 'proj-1', contextType: 'project' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'reorderTasks', {
+        taskIds: ['t3', 't1', 't2'],
+        contextId: 'proj-1',
+        contextType: 'project',
+      });
+    });
+
+    it('propagates error when a task does not belong to the context', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Task foreign-task does not belong to context proj-1', timestamp: Date.now() });
+      const res = await sendCommand(dirs, 'reorderTasks', { taskIds: ['t1', 'foreign-task'], contextId: 'proj-1', contextType: 'project' });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch('does not belong to context');
+    });
+  });
+
   describe('get_worklog aggregation', () => {
     it('aggregates timeSpentOnDay by date and project', () => {
       const tasks = [

@@ -9,7 +9,10 @@ interface TaskRecord {
   title: string;
   isDone: boolean;
   projectId: string | null;
+  parentId?: string | null;
   tagIds: string[];
+  dueDay?: string | null;
+  dueWithTime?: number | null;
   timeSpentOnDay?: Record<string, number>;
   timeEstimate: number;
   timeSpent: number;
@@ -84,9 +87,12 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         include_done: z.boolean().optional().default(false).describe('Include completed tasks'),
         include_archived: z.boolean().optional().default(false).describe('Include archived tasks'),
         search_query: z.string().optional().describe('Case-insensitive title search'),
+        parents_only: z.boolean().optional().default(false).describe('Exclude subtasks — return only top-level tasks'),
+        overdue: z.boolean().optional().default(false).describe('Return only tasks with a due date strictly before today'),
+        unscheduled: z.boolean().optional().default(false).describe('Return only tasks with no due date and no scheduled time'),
       },
     },
-    async ({ project_id, tag_id, include_done, include_archived, search_query }) => {
+    async ({ project_id, tag_id, include_done, include_archived, search_query, parents_only, overdue, unscheduled }) => {
       const filters: TaskFilters = {
         projectId: project_id,
         tagId: tag_id,
@@ -107,6 +113,15 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         tasks = tasks.filter(t => t.title?.toLowerCase().includes(q));
       }
 
+      // Triage filters (FR-004, FR-005, FR-006) — applied after existing filters, combined with AND logic
+      if (parents_only) tasks = tasks.filter(t => !t.parentId);
+      if (overdue) {
+        // Use local date string (YYYY-MM-DD) — matches how dueDay is stored in SP
+        const today = new Date().toISOString().slice(0, 10);
+        tasks = tasks.filter(t => t.dueDay && (t.dueDay as string) < today);
+      }
+      if (unscheduled) tasks = tasks.filter(t => !t.dueDay && !t.dueWithTime);
+
       return okResult(tasks);
     },
   );
@@ -124,9 +139,10 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         due_day: z.string().optional().describe('Due date in ISO format (e.g. 2026-04-20), or empty string to clear'),
         time_estimate: z.number().optional().describe('Time estimate in milliseconds'),
         time_spent: z.number().optional().describe('Time spent in milliseconds'),
+        tag_ids: z.array(z.string()).optional().describe('Bulk-replace all tags with this list (FR-003)'),
       },
     },
-    async ({ task_id, title, notes, is_done, due_day, time_estimate, time_spent }) => {
+    async ({ task_id, title, notes, is_done, due_day, time_estimate, time_spent, tag_ids }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
 
       const data: Record<string, unknown> = {};
@@ -137,11 +153,13 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         data.doneOn = is_done ? Date.now() : null;
       }
       if (due_day !== undefined) {
-              data.dueDay = due_day || null;
-              data.plannedAt = due_day ? Date.now() : null;
-            }
+        data.dueDay = due_day || null;
+        data.plannedAt = due_day ? Date.now() : null;
+      }
       if (time_estimate !== undefined) data.timeEstimate = time_estimate;
       if (time_spent !== undefined) data.timeSpent = time_spent;
+      // tag_ids replaces the entire tag list; use add_tag_to_task / remove_tag_from_task for incremental changes
+      if (tag_ids !== undefined) data.tagIds = tag_ids;
 
       const res = await sendCommand(dirs, 'updateTask', { taskId: task_id, data });
       if (!res.success) return errorResult(res.error ?? 'Failed to update task');
@@ -163,6 +181,97 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       const res = await sendCommand(dirs, 'setTaskDone', { taskId: task_id });
       if (!res.success) return errorResult(res.error ?? 'Failed to complete task');
       return okResult(res.result);
+    },
+  );
+
+  // T004: add_tag_to_task (FR-001 — add single tag without replacing others)
+  server.registerTool(
+    'add_tag_to_task',
+    {
+      description: 'Add a single tag to a task without modifying its other existing tags. Idempotent: calling with an already-present tag succeeds silently.',
+      inputSchema: {
+        task_id: z.string().describe('Task ID'),
+        tag_id: z.string().describe('Tag ID to add'),
+      },
+    },
+    async ({ task_id, tag_id }) => {
+      if (!task_id?.trim()) return errorResult('task_id is required');
+      if (!tag_id?.trim()) return errorResult('tag_id is required');
+      const res = await sendCommand(dirs, 'addTagToTask', { taskId: task_id, tagId: tag_id });
+      if (!res.success) return errorResult(res.error ?? 'Failed to add tag');
+      return okResult(null);
+    },
+  );
+
+  // T005: remove_tag_from_task (FR-002 — remove single tag; error if not present)
+  server.registerTool(
+    'remove_tag_from_task',
+    {
+      description: 'Remove a single tag from a task without modifying its other existing tags. Returns an error if the tag is not currently on the task.',
+      inputSchema: {
+        task_id: z.string().describe('Task ID'),
+        tag_id: z.string().describe('Tag ID to remove'),
+      },
+    },
+    async ({ task_id, tag_id }) => {
+      if (!task_id?.trim()) return errorResult('task_id is required');
+      if (!tag_id?.trim()) return errorResult('tag_id is required');
+      const res = await sendCommand(dirs, 'removeTagFromTask', { taskId: task_id, tagId: tag_id });
+      if (!res.success) return errorResult(res.error ?? 'Failed to remove tag');
+      return okResult(null);
+    },
+  );
+
+  // T014: get_current_task (FR-010 — return currently time-tracked task or null)
+  server.registerTool(
+    'get_current_task',
+    {
+      description: 'Get the currently time-tracked task in Super Productivity. Returns null when no task has an active timer.',
+      inputSchema: {},
+    },
+    async () => {
+      const res = await sendCommand(dirs, 'loadCurrentTask', {});
+      if (!res.success) return errorResult(res.error ?? 'Failed to get current task');
+      return okResult(res.result ?? null);
+    },
+  );
+
+  // T015: move_task_to_project (FR-008 — move top-level task; error on subtask)
+  server.registerTool(
+    'move_task_to_project',
+    {
+      description: 'Move a top-level task to a different project. Returns an error if called on a subtask.',
+      inputSchema: {
+        task_id: z.string().describe('Task ID to move'),
+        project_id: z.string().describe('Destination project ID'),
+      },
+    },
+    async ({ task_id, project_id }) => {
+      if (!task_id?.trim()) return errorResult('task_id is required');
+      if (!project_id?.trim()) return errorResult('project_id is required');
+      const res = await sendCommand(dirs, 'moveTaskToProject', { taskId: task_id, projectId: project_id });
+      if (!res.success) return errorResult(res.error ?? 'Failed to move task');
+      return okResult(null);
+    },
+  );
+
+  // T016: reorder_tasks (FR-009 — reorder tasks within a project or parent)
+  server.registerTool(
+    'reorder_tasks',
+    {
+      description: 'Reorder tasks within a project or subtasks within a parent task. Provide a complete ordered list of task IDs — partial reordering is not supported.',
+      inputSchema: {
+        task_ids: z.array(z.string()).describe('Complete ordered list of task IDs'),
+        context_id: z.string().describe('Project ID (if context_type is "project") or parent task ID (if "parent")'),
+        context_type: z.enum(['project', 'parent']).describe('Whether context_id refers to a project or a parent task'),
+      },
+    },
+    async ({ task_ids, context_id, context_type }) => {
+      if (!task_ids?.length) return errorResult('task_ids must not be empty');
+      if (!context_id?.trim()) return errorResult('context_id is required');
+      const res = await sendCommand(dirs, 'reorderTasks', { taskIds: task_ids, contextId: context_id, contextType: context_type });
+      if (!res.success) return errorResult(res.error ?? 'Failed to reorder tasks');
+      return okResult(null);
     },
   );
 

@@ -11,6 +11,9 @@ An MCP (Model Context Protocol) server that connects AI assistants to <a href="h
 ## Features
 
 - **Task Management**: Create, list, update, and complete tasks
+- **Tag Operations**: Add or remove individual tags without touching other tags; bulk-replace via `update_task`
+- **Triage Filters**: Filter by `parents_only`, `overdue`, or `unscheduled` — combinable with all existing filters
+- **Task Organisation**: Move tasks between projects, reorder tasks within a project or parent, get the currently tracked task
 - **Daily Planning**: Move tasks to Today for planning — set due dates to schedule your day
 - **Project & Tag Management**: Create, list, and update projects and tags
 - **SP Short Syntax**: Full support for `#tags`, `+projects`, `@due-dates`, and time estimates (`30m`, `1h/2h`)
@@ -18,7 +21,7 @@ An MCP (Model Context Protocol) server that connects AI assistants to <a href="h
 - **Notifications**: Show snackbar messages in SP's UI
 - **Diagnostics**: Connection health check and directory debugging
 - **Cross-Platform**: macOS (incl. App Store sandbox), Linux (incl. Snap), Windows
-- **14 MCP Tools** with input validation and clear error messages
+- **19 MCP Tools** with input validation and clear error messages
 
 ## Prerequisites
 
@@ -63,9 +66,14 @@ Ask your AI assistant: *"Check the Super Productivity connection"*
 | Tool | Description |
 |------|-------------|
 | `create_task` | Create a task (supports SP short syntax) |
-| `get_tasks` | List tasks with filters (project, tag, done, archived, search) |
-| `update_task` | Update task fields (title, notes, done, due date, time) |
+| `get_tasks` | List tasks with filters (project, tag, done, archived, search, parents_only, overdue, unscheduled) |
+| `update_task` | Update task fields (title, notes, done, due date, time, tag_ids) |
 | `complete_task` | Mark a task as complete |
+| `add_tag_to_task` | Add a single tag without replacing other tags (idempotent) |
+| `remove_tag_from_task` | Remove a single tag; returns error if tag is not on the task |
+| `move_task_to_project` | Move a top-level task to a different project |
+| `reorder_tasks` | Reorder tasks within a project or subtasks within a parent |
+| `get_current_task` | Get the currently time-tracked task (null if none) |
 | `create_project` | Create a new project |
 | `get_projects` | List all projects |
 | `update_project` | Update project properties |

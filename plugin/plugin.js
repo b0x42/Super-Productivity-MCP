@@ -204,6 +204,86 @@ async function executeCommand(command) {
         }
         result = { success: true };
         break;
+      case 'addTagToTask': {
+        // Read-modify-write: PluginAPI has no native addTagToTask; updateTask replaces tagIds
+        // entirely so we must read the current list first to preserve existing tags (FR-001).
+        // Both the read and write happen within a single JS event-loop turn — effectively atomic.
+        const allTasksForAdd = await PluginAPI.getTasks();
+        const taskForAdd = allTasksForAdd.find(t => t.id === command.taskId);
+        if (!taskForAdd) {
+          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+        const currentTagIds = taskForAdd.tagIds || [];
+        // Idempotent: calling with an already-present tag is a no-op (spec Assumption)
+        if (!currentTagIds.includes(command.tagId)) {
+          await PluginAPI.updateTask(command.taskId, { tagIds: [...currentTagIds, command.tagId] });
+        }
+        result = null;
+        break;
+      }
+      case 'removeTagFromTask': {
+        // Same read-modify-write rationale as addTagToTask.
+        // Error (not silent) when tag is not on the task (FR-002, spec Assumption).
+        const allTasksForRemove = await PluginAPI.getTasks();
+        const taskForRemove = allTasksForRemove.find(t => t.id === command.taskId);
+        if (!taskForRemove) {
+          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+        const tagsForRemove = taskForRemove.tagIds || [];
+        if (!tagsForRemove.includes(command.tagId)) {
+          return { success: false, error: `Tag ${command.tagId} not on task ${command.taskId}`, timestamp: Date.now() };
+        }
+        await PluginAPI.updateTask(command.taskId, { tagIds: tagsForRemove.filter(id => id !== command.tagId) });
+        result = null;
+        break;
+      }
+      case 'loadCurrentTask': {
+        // Retrieve the currently time-tracked task stored by the currentTaskChange hook.
+        // persistDataSynced is single-slot string storage — sufficient since only one task
+        // can be active at a time. Returns null when no timer is running (FR-010).
+        const raw = await PluginAPI.loadSyncedData();
+        try {
+          result = raw ? JSON.parse(raw) : null;
+        } catch (e) {
+          return { success: false, error: 'Failed to parse stored current task', timestamp: Date.now() };
+        }
+        break;
+      }
+      case 'moveTaskToProject': {
+        // updateTask({ projectId }) triggers SP's NgRx reducer to update project.taskIds
+        // automatically. Only valid for top-level tasks; subtasks belong to their parent (FR-008).
+        const allTasksForMove = await PluginAPI.getTasks();
+        const taskForMove = allTasksForMove.find(t => t.id === command.taskId);
+        if (!taskForMove) {
+          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+        if (taskForMove.parentId) {
+          return { success: false, error: `Cannot move subtask: ${command.taskId} has parentId ${taskForMove.parentId}`, timestamp: Date.now() };
+        }
+        const allProjects = await PluginAPI.getAllProjects();
+        if (!allProjects.find(p => p.id === command.projectId)) {
+          return { success: false, error: `Project not found: ${command.projectId}`, timestamp: Date.now() };
+        }
+        await PluginAPI.updateTask(command.taskId, { projectId: command.projectId });
+        result = null;
+        break;
+      }
+      case 'reorderTasks': {
+        // Validate ALL taskIds belong to contextId before calling reorderTasks —
+        // partial apply would silently corrupt the order (spec edge case requirement).
+        const { taskIds, contextId, contextType } = command;
+        const allTasksForReorder = await PluginAPI.getTasks();
+        for (const id of taskIds) {
+          const t = allTasksForReorder.find(t => t.id === id);
+          const belongsToContext = t && (contextType === 'parent' ? t.parentId === contextId : t.projectId === contextId);
+          if (!belongsToContext) {
+            return { success: false, error: `Task ${id} does not belong to context ${contextId}`, timestamp: Date.now() };
+          }
+        }
+        await PluginAPI.reorderTasks(taskIds, contextId, contextType);
+        result = null;
+        break;
+      }
       case 'ping':
         result = { pong: true, pluginVersion: '1.0.0', protocolVersion: PROTOCOL_VERSION };
         break;
@@ -286,6 +366,11 @@ async function init() {
         `,
         args: [commandDir, responseDir],
         timeout: 5000,
+      });
+      // Store current task on change so loadCurrentTask can return it instantly (O(1) lookup).
+      // persistDataSynced is single-slot string storage; single arg only — do NOT pass a key name.
+      PluginAPI.registerHook('currentTaskChange', (payload) => {
+        PluginAPI.persistDataSynced(JSON.stringify(payload.current || null));
       });
       pollTimer = setInterval(pollCommands, POLL_INTERVAL_MS);
       console.log('MCP Bridge Plugin initialized');
