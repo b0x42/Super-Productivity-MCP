@@ -7,3 +7,6 @@ Thumbs.db
 *.tmp
 *.swp
 coverage/
+*.tsbuildinfo
+.vscode/
+.idea/
