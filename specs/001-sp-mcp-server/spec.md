@@ -135,6 +135,8 @@ A user asks the AI assistant for a summary of their work — how much time they 
 - **FR-021**: The SP plugin MUST poll for new command files every 2 seconds by default. The polling interval MUST be configurable by the user via plugin settings.
 - **FR-022**: IPC directories MUST be created with user-only permissions (700 for directories, 600 for files) to prevent other users on shared machines from reading task data.
 - **FR-023**: System MUST provide a worklog tool that returns time spent per day, per project, and per tag for a given date range. It MUST also return task completion counts and estimate-vs-actual accuracy for completed tasks in the range. The data is computed server-side from task `timeSpentOnDay` fields.
+- **FR-024**: The MCP server MUST validate all tool inputs before writing command files. Empty or missing required fields (e.g., title for create operations, IDs for update operations) MUST be rejected immediately with `isError: true` without sending a command to the plugin.
+- **FR-025**: All MCP tool error responses MUST use the SDK's `isError: true` flag so MCP clients can distinguish errors from successful results programmatically.
 
 ### Key Entities
 

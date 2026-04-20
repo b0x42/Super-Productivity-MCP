@@ -98,3 +98,15 @@ await server.connect(transport);
 **Rationale**: The SP Plugin API's `getTasks()` returns all tasks with no filter parameters. Filtering must happen after the data arrives. The MCP server applies filters (projectId, tagId, isDone, search query) to the full task list before returning results to the client.
 
 **Future**: If SP adds filtering to the Plugin API (reference issue #5), the plugin can filter before sending, reducing data transfer.
+
+## MCP Best Practices (from official docs)
+
+**Decision**: Use stdio transport, `isError: true` for errors, server-side input validation, rich tool descriptions.
+
+**Rationale**: Reviewed Anthropic's engineering blog on code execution with MCP, modelcontextprotocol.info best practices, and modelcontextprotocol.io security best practices. Our stdio-only architecture sidesteps all HTTP-related security concerns (SSRF, session hijacking, confused deputy, token passthrough, OAuth scope issues). The three actionable items:
+
+1. **`isError: true`**: The MCP SDK supports `{ isError: true }` on tool results to signal failure. We MUST use this instead of returning error text as a successful result. This lets MCP clients handle errors programmatically.
+2. **Server-side input validation**: Validate required fields (title, IDs, non-negative numbers) before writing command files. Reject invalid inputs immediately without round-tripping through the plugin.
+3. **Rich tool descriptions**: AI agents discover capabilities through tool descriptions. Each tool description should document SP short syntax support (`@`, `#`, `+`, time estimates) so assistants use it effectively.
+
+**Alternatives considered**: None — these are additive improvements, not architectural choices.
