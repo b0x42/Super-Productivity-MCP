@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Two nodes connected by a bridge — representing MCP server ↔ SP plugin -->
+  <rect width="128" height="128" rx="28" fill="#6C63FF"/>
+  <!-- Left node (MCP) -->
+  <circle cx="38" cy="64" r="16" fill="white" opacity="0.95"/>
+  <circle cx="38" cy="64" r="8" fill="#6C63FF"/>
+  <!-- Right node (SP) -->
+  <circle cx="90" cy="64" r="16" fill="white" opacity="0.95"/>
+  <circle cx="90" cy="64" r="8" fill="#6C63FF"/>
+  <!-- Bridge connection -->
+  <rect x="50" y="60" width="28" height="8" rx="4" fill="white" opacity="0.9"/>
+  <!-- Signal arcs (data flow) -->
+  <path d="M28 42 A30 30 0 0 1 28 86" stroke="white" stroke-width="3" fill="none" opacity="0.4"/>
+  <path d="M100 42 A30 30 0 0 0 100 86" stroke="white" stroke-width="3" fill="none" opacity="0.4"/>
+</svg>

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.log
+.env*
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+coverage/
+*.tsbuildinfo
+.vscode/
+.idea/
+.kiro/
+.specify/memory/key-facts.md
