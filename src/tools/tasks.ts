@@ -46,6 +46,15 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (project_id) data.projectId = project_id;
       if (parent_id) data.parentId = parent_id;
 
+      // SP auto-assigns plannedAt/dueDay to today when viewing Today context.
+      // Passing null satisfies SP's `'dueDay' in additional` guard, preventing auto-scheduling
+      // unless the title contains @date syntax (which SP will parse into a date itself).
+      const hasDateSyntax = /@/.test(title);
+      if (!hasDateSyntax) {
+        data.plannedAt = null;
+        data.dueDay = null;
+      }
+
       // T016: subtask SP syntax workaround
       const hasSyntax = parent_id && /[@#[+]]/.test(title);
       if (hasSyntax) {
