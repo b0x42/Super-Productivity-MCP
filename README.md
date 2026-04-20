@@ -23,7 +23,7 @@ An MCP (Model Context Protocol) server that connects AI assistants to [Super Pro
 
 ### 1. Install the SP Plugin
 
-1. Download `plugin.zip` from the [latest release](https://github.com/user/super-productivity-mcp/releases)
+1. Download `plugin.zip` from the [latest release](https://github.com/b0x42/Super-Productivity-MCP/releases)
 2. Open Super Productivity → Settings → Plugins
 3. Click "Upload Plugin" and select `plugin.zip`
 4. Restart Super Productivity
