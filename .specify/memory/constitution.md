@@ -1,20 +1,10 @@
 <!--
   Sync Impact Report
-  Version change: 1.0.0 → 1.1.0 (minor — added principles VII–IX, new sections)
+  Version change: 1.1.0 → 1.2.0 (minor — added principle X)
   Added principles:
-    - VII. Shared Directory Discovery
-    - VIII. SP Syntax Ownership
-    - IX. Graceful Degradation
-  Added sections:
-    - Protocol Versioning
-    - Licensing
-    - Distribution
-  Modified principles:
-    - IV. MCP Protocol Compliance — added Inbox-default rule for task creation
-  Templates requiring updates:
-    - .specify/templates/plan-template.md ✅ no changes needed (generic)
-    - .specify/templates/spec-template.md ✅ no changes needed (generic)
-    - .specify/templates/tasks-template.md ✅ no changes needed (generic)
+    - X. Comment the Why, Not the What
+  Modified principles: none
+  Templates requiring updates: none
   Follow-up TODOs: none
 -->
 
@@ -114,6 +104,17 @@ Rationale: Duplicating SP's syntax parser in the MCP server is fragile and will 
 
 Rationale: MCP clients display tool errors to users. A clear message is the difference between "I know what's wrong" and "something broke."
 
+### X. Comment the Why, Not the What
+
+This is an open-source project. All source code MUST include comments that explain *why* a decision was made, not *what* the code does. Assume the reader can read code but lacks project context.
+
+- Non-obvious business logic, workarounds, and constraints MUST be commented.
+- References to spec requirements (e.g., `FR-014`, `FR-020`) SHOULD be included where the code implements a specific requirement.
+- Do NOT add comments that restate the code (e.g., `// increment counter` above `counter++`).
+- Plugin code (JavaScript) follows the same standard — comments are especially important there since it lacks type safety.
+
+Rationale: Contributors and future maintainers need to understand *why* the code is shaped the way it is. Good comments reduce onboarding time and prevent well-intentioned refactors from breaking subtle invariants.
+
 ## Technology Stack
 
 - **Runtime**: Node.js >= 18
@@ -168,4 +169,4 @@ This constitution supersedes all other development practices for this project. A
 
 All implementation decisions MUST be traceable to a principle in this document. If a decision cannot be justified by an existing principle, propose an amendment first.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-20 | **Last Amended**: 2026-04-20
+**Version**: 1.2.0 | **Ratified**: 2026-04-20 | **Last Amended**: 2026-04-20
