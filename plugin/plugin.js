@@ -121,8 +121,11 @@ async function executeCommand(command) {
         }
         // SP's addTask sets plannedAt to now by default, putting tasks in Today.
         // Clear it so tasks without date syntax land in Inbox instead.
+        // When date syntax IS present, ensure plannedAt is set so the task appears in Today.
         if (result && !hasDateSyntax) {
           await PluginAPI.updateTask(result, { plannedAt: null, dueDay: null });
+        } else if (result && hasDateSyntax) {
+          await PluginAPI.updateTask(result, { plannedAt: Date.now() });
         }
         break;
       }
