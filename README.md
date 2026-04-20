@@ -11,6 +11,7 @@ An MCP (Model Context Protocol) server that connects AI assistants to <a href="h
 ## Features
 
 - **Task Management**: Create, list, update, and complete tasks
+- **Daily Planning**: Move tasks to Today for planning — set due dates to schedule your day
 - **Project & Tag Management**: Create, list, and update projects and tags
 - **SP Short Syntax**: Full support for `#tags`, `+projects`, `@due-dates`, and time estimates (`30m`, `1h/2h`)
 - **Worklog & Metrics**: Time spent per day/project/tag, estimate accuracy
