@@ -110,6 +110,7 @@ async function executeCommand(command) {
         const d = command.data || {};
         const hasParent = !!d.parentId;
         const hasSyntax = hasParent && /[@#\+]/.test(d.title || '');
+        const hasDateSyntax = /@\w/.test(d.title || '');
         if (hasSyntax) {
           const cleanTitle = (d.title || '').replace(/\s*[@#\+]\S+/g, '').trim() || d.title;
           const taskId = await PluginAPI.addTask({ ...d, title: cleanTitle });
@@ -117,6 +118,11 @@ async function executeCommand(command) {
           result = taskId;
         } else {
           result = await PluginAPI.addTask(d);
+        }
+        // SP's addTask sets plannedAt to now by default, putting tasks in Today.
+        // Clear it so tasks without date syntax land in Inbox instead.
+        if (result && !hasDateSyntax) {
+          await PluginAPI.updateTask(result, { plannedAt: null, dueDay: null });
         }
         break;
       }
