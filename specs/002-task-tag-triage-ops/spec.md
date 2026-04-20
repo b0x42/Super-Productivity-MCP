@@ -63,7 +63,7 @@ An AI agent or user wants to move a task to a different project, reorder tasks w
 
 - What happens when add_tag_to_task is called with a tag already on the task? (should be idempotent — no error, no duplicate)
 - What happens when reorder_tasks is called with task IDs that don't all belong to the specified project/parent?
-- What happens when move_task_to_project is called for a subtask? (subtasks have a parent, not a direct project — out of scope)
+- What happens when move_task_to_project is called for a subtask? (subtasks have a parent, not a direct project — system MUST return an error)
 - What happens when overdue and unscheduled filters are combined? (logically exclusive — a task with no due date cannot be overdue; result should be empty)
 
 ## Requirements *(mandatory)*
