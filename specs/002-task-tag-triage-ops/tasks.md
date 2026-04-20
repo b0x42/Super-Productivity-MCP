@@ -25,7 +25,7 @@ Per plan.md project structure:
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T001 Extend `src/ipc/types.ts`: add `parentsOnly?`, `overdue?`, `unscheduled?` to `TaskFilters`; add `taskIds?`, `contextId?`, `contextType?` to `Command`
+- [x] T001 Extend `src/ipc/types.ts`: add `parentsOnly?`, `overdue?`, `unscheduled?` to `TaskFilters`; add `taskIds?`, `contextId?`, `contextType?` to `Command`
 
 **Checkpoint**: Type contracts in place — all user story tasks can now start in parallel.
 
