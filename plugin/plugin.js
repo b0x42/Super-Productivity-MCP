@@ -108,24 +108,54 @@ async function executeCommand(command) {
     switch (command.action) {
       case 'addTask': {
         const d = command.data || {};
+        const title = d.title || '';
+
+        // Parse @date syntax since PluginAPI.addTask doesn't process short syntax
+        const dateMatch = title.match(/@(\S+)(?:\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i);
+        let dueDay = null;
+        if (dateMatch) {
+          const keyword = dateMatch[1].toLowerCase();
+          const now = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          if (keyword === 'today' || keyword === '0days') {
+            dueDay = today.toISOString().slice(0, 10);
+          } else if (keyword === 'tomorrow' || keyword === '1days') {
+            today.setDate(today.getDate() + 1);
+            dueDay = today.toISOString().slice(0, 10);
+          } else if (/^\d+days?$/.test(keyword)) {
+            const days = parseInt(keyword);
+            today.setDate(today.getDate() + days);
+            dueDay = today.toISOString().slice(0, 10);
+          } else {
+            const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+            const idx = dayNames.indexOf(keyword);
+            if (idx !== -1) {
+              const diff = (idx - now.getDay() + 7) % 7 || 7;
+              today.setDate(today.getDate() + diff);
+              dueDay = today.toISOString().slice(0, 10);
+            }
+          }
+        }
+
+        // Strip @syntax from title for clean display
+        const cleanTitle = dueDay ? title.replace(/@\S+(\s+\d{1,2}(:\d{2})?\s*(am|pm)?)?/i, '').trim() : title;
+
         const hasParent = !!d.parentId;
-        const hasSyntax = hasParent && /[@#\+]/.test(d.title || '');
-        const hasDateSyntax = /@\w/.test(d.title || '');
+        const hasSyntax = hasParent && /[#\+]/.test(title);
         if (hasSyntax) {
-          const cleanTitle = (d.title || '').replace(/\s*[@#\+]\S+/g, '').trim() || d.title;
-          const taskId = await PluginAPI.addTask({ ...d, title: cleanTitle });
-          await PluginAPI.updateTask(taskId, { title: d.title });
+          const parentClean = title.replace(/\s*[#\+]\S+/g, '').trim() || title;
+          const taskId = await PluginAPI.addTask({ ...d, title: parentClean });
+          await PluginAPI.updateTask(taskId, { title });
           result = taskId;
         } else {
-          result = await PluginAPI.addTask(d);
+          result = await PluginAPI.addTask({ ...d, title: cleanTitle });
         }
-        // SP's addTask sets plannedAt to now by default, putting tasks in Today.
-        // Clear it so tasks without date syntax land in Inbox instead.
-        // When date syntax IS present, ensure plannedAt is set so the task appears in Today.
-        if (result && !hasDateSyntax) {
+
+        // Set dueDay + plannedAt for Today, or clear plannedAt for Inbox
+        if (result && dueDay) {
+          await PluginAPI.updateTask(result, { dueDay, plannedAt: Date.now() });
+        } else if (result) {
           await PluginAPI.updateTask(result, { plannedAt: null, dueDay: null });
-        } else if (result && hasDateSyntax) {
-          await PluginAPI.updateTask(result, { plannedAt: Date.now() });
         }
         break;
       }
