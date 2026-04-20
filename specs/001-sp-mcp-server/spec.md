@@ -114,7 +114,8 @@ A user asks the AI assistant for a summary of their work — how much time they 
 
 - **FR-001**: System MUST allow creating tasks with a title, optional notes, optional project assignment, optional parent task, and optional tag IDs.
 - **FR-002**: System MUST allow listing tasks with optional filters: by project ID, by tag ID, by done status (include/exclude completed), by archived status (include/exclude archived), and by title search query. When no filters are provided, all non-done, non-archived tasks are returned.
-- **FR-003**: System MUST allow updating any mutable task field: title, notes, done status, time estimate, time spent.
+- **FR-003**: System MUST allow updating any mutable task field: title, notes, done status, due date (`dueDay`), time estimate, time spent.
+- **FR-003a**: When `dueDay` is set on a task, the plugin MUST also set `plannedAt` to the current timestamp so the task appears in Super Productivity's "Today" view. When `dueDay` is cleared, `plannedAt` MUST also be cleared so the task returns to the Inbox (consistent with FR-014).
 - **FR-004**: System MUST allow marking a task as complete (setting `isDone` and `doneOn`).
 - **FR-005**: System MUST allow creating projects with a title, optional description, and optional color.
 - **FR-006**: System MUST allow listing all projects with their IDs, titles, and archive status.
@@ -126,7 +127,7 @@ A user asks the AI assistant for a summary of their work — how much time they 
 - **FR-012**: System MUST provide a connection health check that reports status, plugin version, protocol version, and directory paths.
 - **FR-013**: System MUST provide a debug tool that reports resolved directory paths and their existence status.
 - **FR-014**: Tasks created without a project assignment MUST land in Super Productivity's Inbox, not in "Today" or any other default context.
-- **FR-015**: System MUST pass task titles through verbatim so Super Productivity can interpret its native syntax (`@`, `#`, `+`).
+- **FR-015**: System MUST pass `#tag` and `+project` syntax through verbatim so Super Productivity can interpret them natively. The plugin MUST parse `@date` syntax itself (e.g. `@today`, `@tomorrow`, `@friday`, `@3days`) using local dates, because `PluginAPI.addTask` does not process date short syntax. The `@` token is stripped from the title after parsing.
 - **FR-016**: System MUST handle subtask creation with SP syntax by using the two-step create-then-update workaround.
 - **FR-017**: System MUST work on macOS (standard, App Store sandbox, Homebrew), Linux (standard, Snap), and Windows without user configuration.
 - **FR-018**: System MUST support a `SP_MCP_DATA_DIR` environment variable to override automatic directory detection.

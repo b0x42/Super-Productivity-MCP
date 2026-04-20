@@ -10,7 +10,7 @@ Version: 1 (protocolVersion field value)
 |--------|----------------|-----------------|-------------------|
 | `addTask` | `data.title` | `data.notes`, `data.projectId`, `data.parentId`, `data.tagIds` | Task ID (string) |
 | `getTasks` | — | `filters.projectId`, `filters.tagId`, `filters.includeDone`, `filters.searchQuery` | Task[] |
-| `updateTask` | `taskId` | `data.title`, `data.notes`, `data.isDone`, `data.doneOn`, `data.timeEstimate`, `data.timeSpent` | Task |
+| `updateTask` | `taskId` | `data.title`, `data.notes`, `data.isDone`, `data.doneOn`, `data.dueDay`, `data.plannedAt`, `data.timeEstimate`, `data.timeSpent` | Task |
 | `setTaskDone` | `taskId` | — | Task |
 
 ### Project Operations

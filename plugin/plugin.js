@@ -37,8 +37,8 @@ async function setupDirectories() {
             if (c.dataDir && fs.existsSync(c.dataDir)) {
               const cd = path.join(c.dataDir, 'plugin_commands');
               const rd = path.join(c.dataDir, 'plugin_responses');
-              if (!fs.existsSync(cd)) fs.mkdirSync(cd, { recursive: true });
-              if (!fs.existsSync(rd)) fs.mkdirSync(rd, { recursive: true });
+              if (!fs.existsSync(cd)) fs.mkdirSync(cd, { recursive: true, mode: 0o700 });
+              if (!fs.existsSync(rd)) fs.mkdirSync(rd, { recursive: true, mode: 0o700 });
               return { success: true, commandDir: cd, responseDir: rd };
             }
           }
@@ -47,11 +47,11 @@ async function setupDirectories() {
       // Probe candidates
       for (const p of candidates) {
         try {
-          if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+          if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true, mode: 0o700 });
           const cd = path.join(p, 'plugin_commands');
           const rd = path.join(p, 'plugin_responses');
-          if (!fs.existsSync(cd)) fs.mkdirSync(cd, { recursive: true });
-          if (!fs.existsSync(rd)) fs.mkdirSync(rd, { recursive: true });
+          if (!fs.existsSync(cd)) fs.mkdirSync(cd, { recursive: true, mode: 0o700 });
+          if (!fs.existsSync(rd)) fs.mkdirSync(rd, { recursive: true, mode: 0o700 });
           return { success: true, commandDir: cd, responseDir: rd };
         } catch (e) {}
       }
@@ -76,7 +76,7 @@ async function writeResponse(commandId, response) {
     script: `
       const fs = require('fs');
       const path = require('path');
-      fs.writeFileSync(path.join(args[0], args[1] + '_response.json'), JSON.stringify(args[2], null, 2));
+      fs.writeFileSync(path.join(args[0], args[1] + '_response.json'), JSON.stringify(args[2], null, 2), { mode: 0o600 });
       return { success: true };
     `,
     args: [responseDir, commandId, response],
@@ -262,6 +262,25 @@ async function pollCommands() {
 (async () => {
   try {
     await setupDirectories();
+    // FR-020: Clean stale files on startup (>5min old)
+    await PluginAPI.executeNodeScript({
+      script: `
+        const fs = require('fs');
+        const path = require('path');
+        const now = Date.now();
+        for (const dir of [args[0], args[1]]) {
+          try {
+            for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json'))) {
+              const fp = path.join(dir, f);
+              if (now - fs.statSync(fp).mtimeMs > 300000) fs.unlinkSync(fp);
+            }
+          } catch (e) {}
+        }
+        return { success: true };
+      `,
+      args: [commandDir, responseDir],
+      timeout: 5000,
+    });
     pollTimer = setInterval(pollCommands, POLL_INTERVAL_MS);
     console.log('MCP Bridge Plugin initialized');
   } catch (e) {

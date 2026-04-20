@@ -11,3 +11,4 @@ coverage/
 .vscode/
 .idea/
 .kiro/
+.specify/memory/key-facts.md

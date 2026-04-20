@@ -158,7 +158,7 @@
 - [x] T040 [P] Configure package.json for npm publishing — main: dist/index.js, bin: dist/index.js, files: [dist, README.md, LICENSE], repository, keywords
 - [x] T041 [P] Add eslint config with TypeScript support in eslint.config.js
 - [x] T042 Run full test suite and fix any failures
-- [ ] T043 Run quickstart.md validation — verify documented steps work end-to-end
+- [x] T043 Run quickstart.md validation — verify documented steps work end-to-end
 - [x] T044 [P] Create GitHub Actions CI workflow in .github/workflows/ci.yml — run on push/PR to main: install, lint, test, build; Node 18+20 matrix
 - [x] T045 [P] Create GitHub Actions release workflow in .github/workflows/release.yml — on tag push: build, npm publish, build plugin.zip, create GitHub release with plugin.zip attached
 - [ ] T046 Set up GitHub remote, push to origin, make repo public

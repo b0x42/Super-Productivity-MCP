@@ -127,7 +127,10 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         data.isDone = is_done;
         data.doneOn = is_done ? Date.now() : null;
       }
-      if (due_day !== undefined) data.dueDay = due_day || null;
+      if (due_day !== undefined) {
+              data.dueDay = due_day || null;
+              data.plannedAt = due_day ? Date.now() : null;
+            }
       if (time_estimate !== undefined) data.timeEstimate = time_estimate;
       if (time_spent !== undefined) data.timeSpent = time_spent;
 

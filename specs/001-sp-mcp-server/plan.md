@@ -32,7 +32,7 @@ Build a two-component system — a TypeScript MCP server and a JavaScript Super 
 | V. Cross-Platform by Default | ✅ PASS | Platform-specific paths + SP_MCP_DATA_DIR override |
 | VI. Simplicity & YAGNI | ✅ PASS | Core tools only, no batch/events/dashboard |
 | VII. Shared Directory Discovery | ✅ PASS | Identical probe logic + mcp_config.json bridge |
-| VIII. SP Syntax Ownership | ✅ PASS | Plugin handles @/#/+, server passes verbatim |
+| VIII. SP Syntax Ownership | ✅ PASS | Plugin parses `@date` locally (PluginAPI doesn't handle it); `#`/`+` passed verbatim to SP |
 | IX. Graceful Degradation | ✅ PASS | check_connection tool, clear timeout errors, orphan cleanup |
 
 All gates pass. No violations to justify.

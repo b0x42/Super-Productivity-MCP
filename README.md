@@ -57,7 +57,7 @@ Ask your AI assistant: *"Check the Super Productivity connection"*
 |------|-------------|
 | `create_task` | Create a task (supports SP short syntax) |
 | `get_tasks` | List tasks with filters (project, tag, done, archived, search) |
-| `update_task` | Update task fields (title, notes, done, time) |
+| `update_task` | Update task fields (title, notes, done, due date, time) |
 | `complete_task` | Mark a task as complete |
 | `create_project` | Create a new project |
 | `get_projects` | List all projects |
@@ -72,7 +72,7 @@ Ask your AI assistant: *"Check the Super Productivity connection"*
 
 ## SP Short Syntax
 
-Include these in task titles and SP will parse them automatically:
+Include these in task titles and they will be parsed automatically:
 
 | Syntax | Example | Effect |
 |--------|---------|--------|
