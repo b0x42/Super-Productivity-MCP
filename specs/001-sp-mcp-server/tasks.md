@@ -13,13 +13,13 @@
 
 **Purpose**: Project initialization and build tooling
 
-- [ ] T001 Initialize npm project with package.json (name: super-productivity-mcp, bin entry, node >=18) in project root
-- [ ] T002 [P] Create tsconfig.json with strict mode, ES2020 target, NodeNext module resolution in project root
-- [ ] T003 [P] Create tsup.config.ts with entry src/index.ts, CJS output, target node18 in project root
-- [ ] T004 [P] Add dev dependencies: typescript, tsup, vitest, @types/node, zod in package.json
-- [ ] T005 [P] Add runtime dependencies: @modelcontextprotocol/sdk in package.json
-- [ ] T006 [P] Create .gitignore with node_modules, dist, *.log in project root
-- [ ] T007 [P] Create LICENSE (MIT) in project root
+- [x] T001 Initialize npm project with package.json (name: super-productivity-mcp, bin entry, node >=18) in project root
+- [x] T002 [P] Create tsconfig.json with strict mode, ES2020 target, NodeNext module resolution in project root
+- [x] T003 [P] Create tsup.config.ts with entry src/index.ts, CJS output, target node18 in project root
+- [x] T004 [P] Add dev dependencies: typescript, tsup, vitest, @types/node, zod in package.json
+- [x] T005 [P] Add runtime dependencies: @modelcontextprotocol/sdk in package.json
+- [x] T006 [P] Create .gitignore with node_modules, dist, *.log in project root
+- [x] T007 [P] Create LICENSE (MIT) in project root
 
 **Checkpoint**: `npm install` succeeds, `npx tsup` produces dist/index.js
 

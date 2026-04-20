@@ -1,0 +1,50 @@
+{
+  "name": "super-productivity-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Super Productivity — manage tasks, projects, and tags via AI assistants",
+  "main": "dist/index.js",
+  "bin": {
+    "super-productivity-mcp": "dist/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/",
+    "prepublishOnly": "npm run build",
+    "build:plugin": "cd plugin && zip -r ../dist/plugin.zip manifest.json plugin.js index.html"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "mcp",
+    "super-productivity",
+    "task-management",
+    "ai",
+    "claude",
+    "model-context-protocol"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/super-productivity-mcp"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.4"
+  }
+}
