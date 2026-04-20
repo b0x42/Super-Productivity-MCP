@@ -37,12 +37,12 @@ Per plan.md project structure:
 
 **Independent Test**: Given a task with tags [A, B], call `add_tag_to_task` with C → verify task has [A, B, C]. Call `remove_tag_from_task` with A → verify [B, C]. Call `remove_tag_from_task` with A again → verify error returned.
 
-- [ ] T002 [P] [US1] Add `addTagToTask` command handler in `plugin/plugin.js`: read current `task.tagIds` via `getTasks()`, append tag if absent, call `updateTask({ tagIds: [...] })`; no-op if already present
-- [ ] T003 [P] [US1] Add `removeTagFromTask` command handler in `plugin/plugin.js`: read current `task.tagIds`, filter out tag, call `updateTask({ tagIds: [...] })`; return error if tag not on task
-- [ ] T004 [P] [US1] Add `add_tag_to_task` tool to `registerTaskTools` in `src/tools/tasks.ts`: inputs `task_id`, `tag_id`; sends `addTagToTask` command
-- [ ] T005 [P] [US1] Add `remove_tag_from_task` tool to `registerTaskTools` in `src/tools/tasks.ts`: inputs `task_id`, `tag_id`; sends `removeTagFromTask` command
-- [ ] T006 [P] [US1] Add `tag_ids` parameter to `update_task` tool in `src/tools/tasks.ts`: optional `z.array(z.string())`; when provided, include `tagIds` in the `data` payload sent to `updateTask` command
-- [ ] T007 [P] [US1] Write unit tests for US1 tag operations in `tests/unit/tools/tasks.test.ts`: cover add (idempotent), remove (success + not-present error), bulk-replace via update_task
+- [x] T002 [P] [US1] Add `addTagToTask` command handler in `plugin/plugin.js`: read current `task.tagIds` via `getTasks()`, append tag if absent, call `updateTask({ tagIds: [...] })`; no-op if already present
+- [x] T003 [P] [US1] Add `removeTagFromTask` command handler in `plugin/plugin.js`: read current `task.tagIds`, filter out tag, call `updateTask({ tagIds: [...] })`; return error if tag not on task
+- [x] T004 [P] [US1] Add `add_tag_to_task` tool to `registerTaskTools` in `src/tools/tasks.ts`: inputs `task_id`, `tag_id`; sends `addTagToTask` command
+- [x] T005 [P] [US1] Add `remove_tag_from_task` tool to `registerTaskTools` in `src/tools/tasks.ts`: inputs `task_id`, `tag_id`; sends `removeTagFromTask` command
+- [x] T006 [P] [US1] Add `tag_ids` parameter to `update_task` tool in `src/tools/tasks.ts`: optional `z.array(z.string())`; when provided, include `tagIds` in the `data` payload sent to `updateTask` command
+- [x] T007 [P] [US1] Write unit tests for US1 tag operations in `tests/unit/tools/tasks.test.ts`: cover add (idempotent), remove (success + not-present error), bulk-replace via update_task
 
 **Checkpoint**: Tag management fully functional. `add_tag_to_task`, `remove_tag_from_task`, and `update_task` with `tag_ids` all independently testable.
 
