@@ -213,6 +213,11 @@ async function executeCommand(command) {
         if (!taskForAdd) {
           return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
         }
+        // Validate tagId exists in SP registry — silently appending an unknown tag would violate SC-003.
+        const allTagsForAdd = await PluginAPI.getAllTags();
+        if (!allTagsForAdd.find(t => t.id === command.tagId)) {
+          return { success: false, error: `Tag not found: ${command.tagId}`, timestamp: Date.now() };
+        }
         const currentTagIds = taskForAdd.tagIds || [];
         // Idempotent: calling with an already-present tag is a no-op (spec Assumption)
         if (!currentTagIds.includes(command.tagId)) {

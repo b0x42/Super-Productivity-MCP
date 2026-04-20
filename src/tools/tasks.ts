@@ -116,8 +116,10 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       // Triage filters (FR-004, FR-005, FR-006) — applied after existing filters, combined with AND logic
       if (parents_only) tasks = tasks.filter(t => !t.parentId);
       if (overdue) {
-        // Use local date string (YYYY-MM-DD) — matches how dueDay is stored in SP
-        const today = new Date().toISOString().slice(0, 10);
+        // Use local date string (YYYY-MM-DD) — spec requires local timezone boundary, not UTC.
+        // toISOString() returns UTC and would give wrong results for UTC+ users.
+        const d = new Date();
+        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         tasks = tasks.filter(t => t.dueDay && (t.dueDay as string) < today);
       }
       if (unscheduled) tasks = tasks.filter(t => !t.dueDay && !t.dueWithTime);
