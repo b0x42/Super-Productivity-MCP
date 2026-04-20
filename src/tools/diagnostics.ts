@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { existsSync } from 'node:fs';
 import type { ResolvedDirs } from '../ipc/directories.js';

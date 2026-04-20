@@ -47,9 +47,9 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (parent_id) data.parentId = parent_id;
 
       // T016: subtask SP syntax workaround
-      const hasSyntax = parent_id && /[@#\+]/.test(title);
+      const hasSyntax = parent_id && /[@#[+]]/.test(title);
       if (hasSyntax) {
-        data.title = title.replace(/\s*[@#\+]\S+/g, '').trim() || title;
+        data.title = title.replace(/\s*[@#[+]]\S+/g, '').trim() || title;
       }
 
       const res = await sendCommand(dirs, 'addTask', { data });
