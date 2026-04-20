@@ -1,7 +1,7 @@
 {
-  "id": "sp-mcp-bridge",
-  "name": "MCP Bridge",
-  "description": "Bridge between Super Productivity and MCP servers for AI assistant integration",
+  "id": "super-productivity-mcp",
+  "name": "SP MCP Server",
+  "description": "MCP server bridge for AI assistant integration with Super Productivity",
   "version": "1.0.0",
   "manifestVersion": 1,
   "minSupVersion": "14.0.0",

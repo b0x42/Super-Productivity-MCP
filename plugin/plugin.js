@@ -60,7 +60,9 @@ async function setupDirectories() {
     args: [],
     timeout: 10000,
   });
-  const r = result && result.result ? result.result : result;
+  // executeNodeScript wraps result: could be result.result.success or result.success
+  let r = result;
+  if (r && r.success && r.result && typeof r.result === 'object') r = r.result;
   if (r && r.success) {
     commandDir = r.commandDir;
     responseDir = r.responseDir;
@@ -200,7 +202,7 @@ async function pollCommands() {
       args: [commandDir, lastProcessed],
       timeout: 10000,
     });
-    const r = result && result.result ? result.result : result;
+    const r = result && result.success && result.result && typeof result.result === 'object' ? result.result : result;
     if (!r || !r.success || !r.commands) return;
     for (const cmd of r.commands) {
       try {
