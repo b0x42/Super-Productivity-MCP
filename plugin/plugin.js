@@ -202,7 +202,7 @@ async function executeCommand(command) {
         } catch (e) {
           console.log('Snack:', command.message);
         }
-        result = { success: true };
+        result = null;
         break;
       case 'addTagToTask': {
         // Read-modify-write: PluginAPI has no native addTagToTask; updateTask replaces tagIds
@@ -233,6 +233,11 @@ async function executeCommand(command) {
         const taskForRemove = allTasksForRemove.find(t => t.id === command.taskId);
         if (!taskForRemove) {
           return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+        // Validate tagId exists in SP registry — consistent with addTagToTask validation.
+        const allTagsForRemove = await PluginAPI.getAllTags();
+        if (!allTagsForRemove.find(t => t.id === command.tagId)) {
+          return { success: false, error: `Tag not found: ${command.tagId}`, timestamp: Date.now() };
         }
         const tagsForRemove = taskForRemove.tagIds || [];
         if (!tagsForRemove.includes(command.tagId)) {
@@ -265,6 +270,9 @@ async function executeCommand(command) {
         if (taskForMove.parentId) {
           return { success: false, error: `Cannot move subtask: ${command.taskId} has parentId ${taskForMove.parentId}`, timestamp: Date.now() };
         }
+        if (taskForMove.projectId === command.projectId) {
+          return { success: false, error: `Task ${command.taskId} already in project ${command.projectId}`, timestamp: Date.now() };
+        }
         const allProjects = await PluginAPI.getAllProjects();
         if (!allProjects.find(p => p.id === command.projectId)) {
           return { success: false, error: `Project not found: ${command.projectId}`, timestamp: Date.now() };
@@ -277,7 +285,17 @@ async function executeCommand(command) {
         // Validate ALL taskIds belong to contextId before calling reorderTasks —
         // partial apply would silently corrupt the order (spec edge case requirement).
         const { taskIds, contextId, contextType } = command;
+        // Validate contextId exists before checking task membership.
+        if (contextType === 'project') {
+          const allProjectsForReorder = await PluginAPI.getAllProjects();
+          if (!allProjectsForReorder.find(p => p.id === contextId)) {
+            return { success: false, error: `Context not found: ${contextId}`, timestamp: Date.now() };
+          }
+        }
         const allTasksForReorder = await PluginAPI.getTasks();
+        if (contextType === 'parent' && !allTasksForReorder.find(t => t.id === contextId)) {
+          return { success: false, error: `Context not found: ${contextId}`, timestamp: Date.now() };
+        }
         for (const id of taskIds) {
           const t = allTasksForReorder.find(t => t.id === id);
           const belongsToContext = t && (contextType === 'parent' ? t.parentId === contextId : t.projectId === contextId);
@@ -372,10 +390,18 @@ async function init() {
         args: [commandDir, responseDir],
         timeout: 5000,
       });
+      // Seed currentTask as null to clear stale data from previous sessions.
+      // The currentTaskChange hook will overwrite this with the real value on the next change.
+      // If SP already has an active timer at plugin load, the hook fires once SP dispatches
+      // the current-task state; until then, get_current_task returns null (safe default).
+      PluginAPI.persistDataSynced(JSON.stringify(null));
       // Store current task on change so loadCurrentTask can return it instantly (O(1) lookup).
       // persistDataSynced is single-slot string storage; single arg only — do NOT pass a key name.
       PluginAPI.registerHook('currentTaskChange', (payload) => {
-        PluginAPI.persistDataSynced(JSON.stringify(payload.current || null));
+        // Store only known task fields to avoid leaking SP internals and to keep the payload stable.
+        const t = payload.current;
+        const stored = t ? { id: t.id, title: t.title, isDone: t.isDone, projectId: t.projectId, parentId: t.parentId, tagIds: t.tagIds, dueDay: t.dueDay } : null;
+        PluginAPI.persistDataSynced(JSON.stringify(stored));
       });
       pollTimer = setInterval(pollCommands, POLL_INTERVAL_MS);
       console.log('MCP Bridge Plugin initialized');

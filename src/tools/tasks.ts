@@ -28,6 +28,26 @@ function okResult(data: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(data ?? null, null, 2) }] };
 }
 
+/** Compute local YYYY-MM-DD date string (not UTC — spec requires local timezone boundary). */
+export function localDateStr(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Apply triage filters to a task list. Exported for testability. */
+export function applyTriageFilters(
+  tasks: TaskRecord[],
+  opts: { parentsOnly?: boolean; overdue?: boolean; unscheduled?: boolean },
+): TaskRecord[] {
+  let result = tasks;
+  if (opts.parentsOnly) result = result.filter(t => !t.parentId);
+  if (opts.overdue) {
+    const today = localDateStr();
+    result = result.filter(t => t.dueDay != null && (t.dueDay as string) < today);
+  }
+  if (opts.unscheduled) result = result.filter(t => !t.dueDay && !t.dueWithTime);
+  return result;
+}
+
 export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
   // T015: create_task
   server.registerTool(
@@ -113,16 +133,8 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         tasks = tasks.filter(t => t.title?.toLowerCase().includes(q));
       }
 
-      // Triage filters (FR-004, FR-005, FR-006) — applied after existing filters, combined with AND logic
-      if (parents_only) tasks = tasks.filter(t => !t.parentId);
-      if (overdue) {
-        // Use local date string (YYYY-MM-DD) — spec requires local timezone boundary, not UTC.
-        // toISOString() returns UTC and would give wrong results for UTC+ users.
-        const d = new Date();
-        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        tasks = tasks.filter(t => t.dueDay && (t.dueDay as string) < today);
-      }
-      if (unscheduled) tasks = tasks.filter(t => !t.dueDay && !t.dueWithTime);
+      // Triage filters (FR-004, FR-005, FR-006)
+      tasks = applyTriageFilters(tasks, { parentsOnly: parents_only, overdue, unscheduled });
 
       return okResult(tasks);
     },

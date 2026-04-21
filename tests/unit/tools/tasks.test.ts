@@ -6,6 +6,7 @@ vi.mock('../../../src/ipc/command-sender.js', () => ({
 }));
 
 import { sendCommand } from '../../../src/ipc/command-sender.js';
+import { applyTriageFilters, localDateStr } from '../../../src/tools/tasks.js';
 import type { ResolvedDirs } from '../../../src/ipc/directories.js';
 import type { Response } from '../../../src/ipc/types.js';
 
@@ -130,6 +131,14 @@ describe('task tool logic', () => {
       expect(res.success).toBe(false);
       expect(res.error).toMatch('Task not found');
     });
+
+    it('succeeds silently when tag already present (idempotent)', async () => {
+      // Plugin returns success even when tag is already on the task — no-op
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      const res = await sendCommand(dirs, 'addTagToTask', { taskId: 'task-1', tagId: 'tag-already-there' });
+      expect(res.success).toBe(true);
+      expect(res.result).toBeNull();
+    });
   });
 
   describe('remove_tag_from_task via sendCommand', () => {
@@ -165,45 +174,49 @@ describe('task tool logic', () => {
     });
   });
 
-  // T010: US2 — triage filter logic
+  // T010: US2 — triage filter logic (exercises actual applyTriageFilters from tasks.ts)
   describe('get_tasks triage filters', () => {
-    const today = new Date().toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const today = localDateStr();
+    const yesterday = localDateStr(new Date(Date.now() - 86400000));
+    const tomorrow = localDateStr(new Date(Date.now() + 86400000));
 
     const tasks = [
-      { id: '1', title: 'Parent overdue', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: yesterday, dueWithTime: null },
-      { id: '2', title: 'Parent unscheduled', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null },
-      { id: '3', title: 'Parent future', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: tomorrow, dueWithTime: null },
-      { id: '4', title: 'Subtask overdue', isDone: false, projectId: null, tagIds: [], parentId: 'task-parent', dueDay: yesterday, dueWithTime: null },
-      { id: '5', title: 'Scheduled today', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: today, dueWithTime: null },
+      { id: '1', title: 'Parent overdue', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: yesterday, dueWithTime: null, timeEstimate: 0, timeSpent: 0 },
+      { id: '2', title: 'Parent unscheduled', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0 },
+      { id: '3', title: 'Parent future', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: tomorrow, dueWithTime: null, timeEstimate: 0, timeSpent: 0 },
+      { id: '4', title: 'Subtask overdue', isDone: false, projectId: null, tagIds: [], parentId: 'task-parent', dueDay: yesterday, dueWithTime: null, timeEstimate: 0, timeSpent: 0 },
+      { id: '5', title: 'Scheduled today', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: today, dueWithTime: null, timeEstimate: 0, timeSpent: 0 },
     ];
 
     it('parents_only excludes subtasks', () => {
-      const result = tasks.filter(t => !t.parentId);
+      const result = applyTriageFilters(tasks, { parentsOnly: true });
       expect(result.every(t => !t.parentId)).toBe(true);
       expect(result.find(t => t.id === '4')).toBeUndefined();
     });
 
     it('overdue returns only tasks with dueDay strictly before today', () => {
-      const result = tasks.filter(t => t.dueDay && t.dueDay < today);
+      const result = applyTriageFilters(tasks, { overdue: true });
       expect(result.every(t => t.dueDay! < today)).toBe(true);
       expect(result.map(t => t.id)).toEqual(expect.arrayContaining(['1', '4']));
-      expect(result.find(t => t.id === '5')).toBeUndefined(); // today is not overdue
+    });
+
+    it('overdue excludes dueDay === today (boundary)', () => {
+      const result = applyTriageFilters(tasks, { overdue: true });
+      expect(result.find(t => t.id === '5')).toBeUndefined();
     });
 
     it('unscheduled returns only tasks with no dueDay and no dueWithTime', () => {
-      const result = tasks.filter(t => !t.dueDay && !t.dueWithTime);
+      const result = applyTriageFilters(tasks, { unscheduled: true });
       expect(result.map(t => t.id)).toEqual(['2']);
     });
 
     it('parents_only + unscheduled returns AND intersection', () => {
-      const result = tasks.filter(t => !t.parentId && !t.dueDay && !t.dueWithTime);
+      const result = applyTriageFilters(tasks, { parentsOnly: true, unscheduled: true });
       expect(result.map(t => t.id)).toEqual(['2']);
     });
 
     it('overdue + unscheduled returns empty (mutually exclusive)', () => {
-      const result = tasks.filter(t => t.dueDay && t.dueDay < today && !t.dueDay && !t.dueWithTime);
+      const result = applyTriageFilters(tasks, { overdue: true, unscheduled: true });
       expect(result).toHaveLength(0);
     });
   });
