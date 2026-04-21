@@ -49,7 +49,7 @@ export function applyTriageFilters(
 }
 
 export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
-  // T015: create_task
+  // create_task
   server.registerTool(
     'create_task',
     {
@@ -79,9 +79,9 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       }
 
       // T016: subtask SP syntax workaround
-      const hasSyntax = parent_id && /[@#[+]]/.test(title);
+      const hasSyntax = parent_id && /[@#+]/.test(title);
       if (hasSyntax) {
-        data.title = title.replace(/\s*[@#[+]]\S+/g, '').trim() || title;
+        data.title = title.replace(/\s*[@#+]\S+/g, '').trim() || title;
       }
 
       const res = await sendCommand(dirs, 'addTask', { data });
@@ -96,7 +96,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     },
   );
 
-  // T017: get_tasks
+  // get_tasks
   server.registerTool(
     'get_tasks',
     {
@@ -140,7 +140,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     },
   );
 
-  // T018: update_task
+  // update_task
   server.registerTool(
     'update_task',
     {
@@ -181,7 +181,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     },
   );
 
-  // T019: complete_task
+  // complete_task
   server.registerTool(
     'complete_task',
     {
@@ -250,7 +250,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     },
   );
 
-  // T015: move_task_to_project (FR-008 — move top-level task; error on subtask)
+  // move_task_to_project (FR-008 — move top-level task; error on subtask)
   server.registerTool(
     'move_task_to_project',
     {
@@ -269,7 +269,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     },
   );
 
-  // T016: reorder_tasks (FR-009 — reorder tasks within a project or parent)
+  // reorder_tasks (FR-009 — reorder tasks within a project or parent)
   server.registerTool(
     'reorder_tasks',
     {
@@ -289,7 +289,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     },
   );
 
-  // T030: get_worklog (US5 — registered here since it uses task data)
+  // get_worklog (US5 — registered here since it uses task data)
   server.registerTool(
     'get_worklog',
     {
@@ -331,7 +331,8 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         }
         // Count completions in range
         if (task.isDone && task.doneOn) {
-          const doneDate = new Date(task.doneOn).toISOString().slice(0, 10);
+          const d = new Date(task.doneOn);
+          const doneDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
           if (doneDate >= start_date && doneDate <= end_date) {
             completedCount++;
             if (task.timeEstimate > 0) {

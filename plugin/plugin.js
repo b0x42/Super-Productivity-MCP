@@ -296,9 +296,12 @@ async function executeCommand(command) {
         if (contextType === 'parent' && !allTasksForReorder.find(t => t.id === contextId)) {
           return { success: false, error: `Context not found: ${contextId}`, timestamp: Date.now() };
         }
+        if (!Array.isArray(taskIds)) {
+          return { success: false, error: 'taskIds must be an array', timestamp: Date.now() };
+        }
         for (const id of taskIds) {
-          const t = allTasksForReorder.find(t => t.id === id);
-          const belongsToContext = t && (contextType === 'parent' ? t.parentId === contextId : t.projectId === contextId);
+          const taskToCheck = allTasksForReorder.find(t => t.id === id);
+          const belongsToContext = taskToCheck && (contextType === 'parent' ? taskToCheck.parentId === contextId : taskToCheck.projectId === contextId);
           if (!belongsToContext) {
             return { success: false, error: `Task ${id} does not belong to context ${contextId}`, timestamp: Date.now() };
           }
