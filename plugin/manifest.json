@@ -2,14 +2,28 @@
   "id": "super-productivity-mcp",
   "name": "SP MCP Server",
   "description": "MCP server bridge for AI assistant integration with Super Productivity",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "manifestVersion": 1,
   "minSupVersion": "14.0.0",
-  "permissions": ["nodeExecution"],
-  "hooks": ["taskUpdate", "taskComplete", "taskDelete", "currentTaskChange"],
+  "permissions": [
+    "nodeExecution"
+  ],
+  "hooks": [
+    "taskUpdate",
+    "taskComplete",
+    "taskDelete",
+    "currentTaskChange"
+  ],
   "iFrame": true,
   "isSkipMenuEntry": true,
   "icon": "icon.svg",
-  "categories": ["integration", "automation"],
-  "tags": ["mcp", "ai", "integration"]
+  "categories": [
+    "integration",
+    "automation"
+  ],
+  "tags": [
+    "mcp",
+    "ai",
+    "integration"
+  ]
 }

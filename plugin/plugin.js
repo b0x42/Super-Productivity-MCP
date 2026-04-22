@@ -284,7 +284,7 @@ async function executeCommand(command) {
         break;
       }
       case 'ping':
-        result = { pong: true, pluginVersion: '1.0.0', protocolVersion: PROTOCOL_VERSION };
+        result = { pong: true, pluginVersion: '1.1.0', protocolVersion: PROTOCOL_VERSION };
         break;
       default:
         return { success: false, error: `Unknown command action: ${command.action}`, timestamp: Date.now() };
