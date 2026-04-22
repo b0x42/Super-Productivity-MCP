@@ -17,7 +17,7 @@ async function setupDirectories() {
       let candidates;
       if (os.platform() === 'darwin') {
         candidates = [
-          path.join(home, 'Library', 'Containers', 'com.super-productivity.app', 'Data', 'Library', 'Application Support', APP),
+          path.join(home, 'Library', 'Containers', 'com.superproductivity.app', 'Data', 'Library', 'Application Support', APP),
           path.join(home, 'Library', 'Application Support', APP)
         ];
       } else if (os.platform() === 'win32') {
