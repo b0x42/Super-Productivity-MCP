@@ -2,13 +2,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { existsSync } from 'node:fs';
 import type { ResolvedDirs } from '../ipc/directories.js';
 import { sendCommand } from '../ipc/command-sender.js';
+import { errorResult, okResult } from './result.js';
 
-function errorResult(msg: string) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify({ error: msg }) }], isError: true };
-}
-function okResult(data: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(data ?? null, null, 2) }] };
-}
 
 export function registerDiagnosticTools(server: McpServer, dirs: ResolvedDirs): void {
   server.registerTool('check_connection', {

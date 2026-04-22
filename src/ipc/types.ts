@@ -9,6 +9,10 @@ export interface Command {
   tagId?: string;
   message?: string;
   filters?: TaskFilters;
+  // Fields for reorderTasks (FR-009)
+  taskIds?: string[];
+  contextId?: string;
+  contextType?: 'project' | 'parent';
 }
 
 export interface TaskFilters {
@@ -17,6 +21,10 @@ export interface TaskFilters {
   includeDone?: boolean;
   includeArchived?: boolean;
   searchQuery?: string;
+  // Triage filters (FR-004, FR-005, FR-006) — applied server-side after getTasks()
+  parentsOnly?: boolean;
+  overdue?: boolean;
+  unscheduled?: boolean;
 }
 
 export interface Response {

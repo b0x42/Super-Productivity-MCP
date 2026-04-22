@@ -5,6 +5,7 @@ let commandDir = null;
 let responseDir = null;
 let pollTimer = null;
 let lastProcessed = 0;
+let currentTrackedTask = null;
 
 async function setupDirectories() {
   const result = await PluginAPI.executeNodeScript({
@@ -114,7 +115,7 @@ async function executeCommand(command) {
         // Use local date formatting (not toISOString which converts to UTC and shifts the day in positive timezones).
         const dateMatch = title.match(/@(\S+)(?:\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i);
         let dueDay = null;
-        const localDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const localDateStr = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
         if (dateMatch) {
           const keyword = dateMatch[1].toLowerCase();
           const now = new Date();
@@ -204,6 +205,84 @@ async function executeCommand(command) {
         }
         result = { success: true };
         break;
+      case 'addTagToTask': {
+        // Read-modify-write: PluginAPI has no native addTagToTask; updateTask replaces tagIds
+        // entirely so we must read the current list first to preserve existing tags (FR-001).
+        // Both the read and write happen within a single JS event-loop turn — effectively atomic.
+        const allTasksForAdd = await PluginAPI.getTasks();
+        const taskForAdd = allTasksForAdd.find(t => t.id === command.taskId);
+        if (!taskForAdd) {
+          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+        const currentTagIds = taskForAdd.tagIds || [];
+        // Idempotent: calling with an already-present tag is a no-op (spec Assumption)
+        if (!currentTagIds.includes(command.tagId)) {
+          await PluginAPI.updateTask(command.taskId, { tagIds: [...currentTagIds, command.tagId] });
+        }
+        result = null;
+        break;
+      }
+      case 'removeTagFromTask': {
+        // Same read-modify-write rationale as addTagToTask.
+        // Error (not silent) when tag is not on the task (FR-002, spec Assumption).
+        const allTasksForRemove = await PluginAPI.getTasks();
+        const taskForRemove = allTasksForRemove.find(t => t.id === command.taskId);
+        if (!taskForRemove) {
+          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+        const tagsForRemove = taskForRemove.tagIds || [];
+        if (!tagsForRemove.includes(command.tagId)) {
+          return { success: false, error: `Tag ${command.tagId} not on task ${command.taskId}`, timestamp: Date.now() };
+        }
+        await PluginAPI.updateTask(command.taskId, { tagIds: tagsForRemove.filter(id => id !== command.tagId) });
+        result = null;
+        break;
+      }
+      case 'loadCurrentTask': {
+        // Cannot use registerHook('currentTaskChange') — it breaks plugin polling.
+        // Instead, scan tasks for active timer via currentTimestamp field.
+        const allTasksCurrent = await PluginAPI.getTasks();
+        const active = allTasksCurrent.find(t => t.currentTimestamp > 0) || null;
+        result = active ? { id: active.id, title: active.title, isDone: active.isDone, projectId: active.projectId, parentId: active.parentId, tagIds: active.tagIds, dueDay: active.dueDay } : null;
+        break;
+      }
+      case 'moveTaskToProject': {
+        // updateTask({ projectId }) triggers SP's NgRx reducer to update project.taskIds
+        // automatically. Only valid for top-level tasks; subtasks belong to their parent (FR-008).
+        const allTasksForMove = await PluginAPI.getTasks();
+        const taskForMove = allTasksForMove.find(t => t.id === command.taskId);
+        if (!taskForMove) {
+          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+        if (taskForMove.parentId) {
+          return { success: false, error: `Cannot move subtask: ${command.taskId} has parentId ${taskForMove.parentId}`, timestamp: Date.now() };
+        }
+        const allProjects = await PluginAPI.getAllProjects();
+        if (!allProjects.find(p => p.id === command.projectId)) {
+          return { success: false, error: `Project not found: ${command.projectId}`, timestamp: Date.now() };
+        }
+        await PluginAPI.updateTask(command.taskId, { projectId: command.projectId });
+        result = null;
+        break;
+      }
+      case 'reorderTasks': {
+        // Validate ALL taskIds belong to contextId before calling reorderTasks —
+        // partial apply would silently corrupt the order (spec edge case requirement).
+        const { taskIds, contextId, contextType } = command;
+        const allTasksForReorder = await PluginAPI.getTasks();
+        for (const id of taskIds) {
+          const t = allTasksForReorder.find(t => t.id === id);
+          const belongsToContext = t && (contextType === 'parent' ? t.parentId === contextId : t.projectId === contextId);
+          if (!belongsToContext) {
+            return { success: false, error: `Task ${id} does not belong to context ${contextId}`, timestamp: Date.now() };
+          }
+        }
+        // PluginAPI uses 'task' not 'parent' for subtask context
+        const apiContextType = contextType === 'parent' ? 'task' : contextType;
+        await PluginAPI.reorderTasks(taskIds, contextId, apiContextType);
+        result = null;
+        break;
+      }
       case 'ping':
         result = { pong: true, pluginVersion: '1.0.0', protocolVersion: PROTOCOL_VERSION };
         break;
@@ -261,10 +340,12 @@ async function pollCommands() {
 }
 
 // Initialize with retry — nodeExecution permission may not be ready on first plugin activation
-const MAX_RETRIES = 5;
-const RETRY_DELAY_MS = 2000;
+const MAX_RETRIES = 10;
+const INITIAL_DELAY_MS = 1000;
 
 async function init() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  let delay = INITIAL_DELAY_MS;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       await setupDirectories();
@@ -293,7 +374,8 @@ async function init() {
     } catch (e) {
       console.error('MCP Bridge init attempt ' + attempt + '/' + MAX_RETRIES + ' failed:', e);
       if (attempt < MAX_RETRIES) {
-        await new Promise(function(r) { setTimeout(r, RETRY_DELAY_MS); });
+        await new Promise(function(r) { setTimeout(r, delay); });
+        delay = Math.min(delay * 2, 10000);
       }
     }
   }
@@ -301,4 +383,4 @@ async function init() {
 }
 
 // Delay first attempt to let SP finish granting permissions
-setTimeout(init, 1500);
+setTimeout(init, 500);
