@@ -61,6 +61,8 @@ Add to your MCP client config:
 
 Ask your AI assistant: *"Check the Super Productivity connection"*
 
+> **💡 Plugin not responding?** If the connection check fails after a fresh install or reboot, toggle the plugin off and on again in Settings → Plugins. This is a [known SP issue](https://github.com/super-productivity/super-productivity/issues/7326) where the `nodeExecution` permission isn't ready when the plugin first loads.
+
 ## Available Tools
 
 | Tool | Description |
