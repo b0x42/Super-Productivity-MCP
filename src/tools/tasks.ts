@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ResolvedDirs } from '../ipc/directories.js';
 import { sendCommand } from '../ipc/command-sender.js';
 import type { TaskFilters } from '../ipc/types.js';
+import { errorResult, okResult } from './result.js';
 
 interface TaskRecord {
   id: string;
@@ -20,13 +21,7 @@ interface TaskRecord {
   [key: string]: unknown;
 }
 
-function errorResult(msg: string) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify({ error: msg }) }], isError: true };
-}
 
-function okResult(data: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(data ?? null, null, 2) }] };
-}
 
 /** Compute local YYYY-MM-DD date string (not UTC — spec requires local timezone boundary). */
 export function localDateStr(d: Date = new Date()): string {

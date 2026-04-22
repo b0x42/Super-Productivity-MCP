@@ -5,6 +5,7 @@ let commandDir = null;
 let responseDir = null;
 let pollTimer = null;
 let lastProcessed = 0;
+let currentTrackedTask = null;
 
 async function setupDirectories() {
   const result = await PluginAPI.executeNodeScript({
@@ -17,7 +18,7 @@ async function setupDirectories() {
       let candidates;
       if (os.platform() === 'darwin') {
         candidates = [
-          path.join(home, 'Library', 'Containers', 'com.superproductivity.app', 'Data', 'Library', 'Application Support', APP),
+          path.join(home, 'Library', 'Containers', 'com.super-productivity.app', 'Data', 'Library', 'Application Support', APP),
           path.join(home, 'Library', 'Application Support', APP)
         ];
       } else if (os.platform() === 'win32') {
@@ -114,7 +115,7 @@ async function executeCommand(command) {
         // Use local date formatting (not toISOString which converts to UTC and shifts the day in positive timezones).
         const dateMatch = title.match(/@(\S+)(?:\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i);
         let dueDay = null;
-        const localDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const localDateStr = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
         if (dateMatch) {
           const keyword = dateMatch[1].toLowerCase();
           const now = new Date();
@@ -202,7 +203,7 @@ async function executeCommand(command) {
         } catch (e) {
           console.log('Snack:', command.message);
         }
-        result = null;
+        result = { success: true };
         break;
       case 'addTagToTask': {
         // Read-modify-write: PluginAPI has no native addTagToTask; updateTask replaces tagIds
@@ -212,11 +213,6 @@ async function executeCommand(command) {
         const taskForAdd = allTasksForAdd.find(t => t.id === command.taskId);
         if (!taskForAdd) {
           return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
-        }
-        // Validate tagId exists in SP registry — silently appending an unknown tag would violate SC-003.
-        const allTagsForAdd = await PluginAPI.getAllTags();
-        if (!allTagsForAdd.find(t => t.id === command.tagId)) {
-          return { success: false, error: `Tag not found: ${command.tagId}`, timestamp: Date.now() };
         }
         const currentTagIds = taskForAdd.tagIds || [];
         // Idempotent: calling with an already-present tag is a no-op (spec Assumption)
@@ -234,11 +230,6 @@ async function executeCommand(command) {
         if (!taskForRemove) {
           return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
         }
-        // Validate tagId exists in SP registry — consistent with addTagToTask validation.
-        const allTagsForRemove = await PluginAPI.getAllTags();
-        if (!allTagsForRemove.find(t => t.id === command.tagId)) {
-          return { success: false, error: `Tag not found: ${command.tagId}`, timestamp: Date.now() };
-        }
         const tagsForRemove = taskForRemove.tagIds || [];
         if (!tagsForRemove.includes(command.tagId)) {
           return { success: false, error: `Tag ${command.tagId} not on task ${command.taskId}`, timestamp: Date.now() };
@@ -248,15 +239,11 @@ async function executeCommand(command) {
         break;
       }
       case 'loadCurrentTask': {
-        // Retrieve the currently time-tracked task stored by the currentTaskChange hook.
-        // persistDataSynced is single-slot string storage — sufficient since only one task
-        // can be active at a time. Returns null when no timer is running (FR-010).
-        const raw = await PluginAPI.loadSyncedData();
-        try {
-          result = raw ? JSON.parse(raw) : null;
-        } catch (e) {
-          return { success: false, error: 'Failed to parse stored current task', timestamp: Date.now() };
-        }
+        // Cannot use registerHook('currentTaskChange') — it breaks plugin polling.
+        // Instead, scan tasks for active timer via currentTimestamp field.
+        const allTasksCurrent = await PluginAPI.getTasks();
+        const active = allTasksCurrent.find(t => t.currentTimestamp > 0) || null;
+        result = active ? { id: active.id, title: active.title, isDone: active.isDone, projectId: active.projectId, parentId: active.parentId, tagIds: active.tagIds, dueDay: active.dueDay } : null;
         break;
       }
       case 'moveTaskToProject': {
@@ -270,9 +257,6 @@ async function executeCommand(command) {
         if (taskForMove.parentId) {
           return { success: false, error: `Cannot move subtask: ${command.taskId} has parentId ${taskForMove.parentId}`, timestamp: Date.now() };
         }
-        if (taskForMove.projectId === command.projectId) {
-          return { success: false, error: `Task ${command.taskId} already in project ${command.projectId}`, timestamp: Date.now() };
-        }
         const allProjects = await PluginAPI.getAllProjects();
         if (!allProjects.find(p => p.id === command.projectId)) {
           return { success: false, error: `Project not found: ${command.projectId}`, timestamp: Date.now() };
@@ -285,28 +269,17 @@ async function executeCommand(command) {
         // Validate ALL taskIds belong to contextId before calling reorderTasks —
         // partial apply would silently corrupt the order (spec edge case requirement).
         const { taskIds, contextId, contextType } = command;
-        // Validate contextId exists before checking task membership.
-        if (contextType === 'project') {
-          const allProjectsForReorder = await PluginAPI.getAllProjects();
-          if (!allProjectsForReorder.find(p => p.id === contextId)) {
-            return { success: false, error: `Context not found: ${contextId}`, timestamp: Date.now() };
-          }
-        }
         const allTasksForReorder = await PluginAPI.getTasks();
-        if (contextType === 'parent' && !allTasksForReorder.find(t => t.id === contextId)) {
-          return { success: false, error: `Context not found: ${contextId}`, timestamp: Date.now() };
-        }
-        if (!Array.isArray(taskIds)) {
-          return { success: false, error: 'taskIds must be an array', timestamp: Date.now() };
-        }
         for (const id of taskIds) {
-          const taskToCheck = allTasksForReorder.find(t => t.id === id);
-          const belongsToContext = taskToCheck && (contextType === 'parent' ? taskToCheck.parentId === contextId : taskToCheck.projectId === contextId);
+          const t = allTasksForReorder.find(t => t.id === id);
+          const belongsToContext = t && (contextType === 'parent' ? t.parentId === contextId : t.projectId === contextId);
           if (!belongsToContext) {
             return { success: false, error: `Task ${id} does not belong to context ${contextId}`, timestamp: Date.now() };
           }
         }
-        await PluginAPI.reorderTasks(taskIds, contextId, contextType);
+        // PluginAPI uses 'task' not 'parent' for subtask context
+        const apiContextType = contextType === 'parent' ? 'task' : contextType;
+        await PluginAPI.reorderTasks(taskIds, contextId, apiContextType);
         result = null;
         break;
       }
@@ -367,10 +340,12 @@ async function pollCommands() {
 }
 
 // Initialize with retry — nodeExecution permission may not be ready on first plugin activation
-const MAX_RETRIES = 5;
-const RETRY_DELAY_MS = 2000;
+const MAX_RETRIES = 10;
+const INITIAL_DELAY_MS = 1000;
 
 async function init() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  let delay = INITIAL_DELAY_MS;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       await setupDirectories();
@@ -393,26 +368,14 @@ async function init() {
         args: [commandDir, responseDir],
         timeout: 5000,
       });
-      // Seed currentTask as null to clear stale data from previous sessions.
-      // The currentTaskChange hook will overwrite this with the real value on the next change.
-      // If SP already has an active timer at plugin load, the hook fires once SP dispatches
-      // the current-task state; until then, get_current_task returns null (safe default).
-      PluginAPI.persistDataSynced(JSON.stringify(null));
-      // Store current task on change so loadCurrentTask can return it instantly (O(1) lookup).
-      // persistDataSynced is single-slot string storage; single arg only — do NOT pass a key name.
-      PluginAPI.registerHook('currentTaskChange', (payload) => {
-        // Store only known task fields to avoid leaking SP internals and to keep the payload stable.
-        const t = payload.current;
-        const stored = t ? { id: t.id, title: t.title, isDone: t.isDone, projectId: t.projectId, parentId: t.parentId, tagIds: t.tagIds, dueDay: t.dueDay } : null;
-        PluginAPI.persistDataSynced(JSON.stringify(stored));
-      });
       pollTimer = setInterval(pollCommands, POLL_INTERVAL_MS);
       console.log('MCP Bridge Plugin initialized');
       return;
     } catch (e) {
       console.error('MCP Bridge init attempt ' + attempt + '/' + MAX_RETRIES + ' failed:', e);
       if (attempt < MAX_RETRIES) {
-        await new Promise(function(r) { setTimeout(r, RETRY_DELAY_MS); });
+        await new Promise(function(r) { setTimeout(r, delay); });
+        delay = Math.min(delay * 2, 10000);
       }
     }
   }
@@ -420,4 +383,4 @@ async function init() {
 }
 
 // Delay first attempt to let SP finish granting permissions
-setTimeout(init, 1500);
+setTimeout(init, 500);
