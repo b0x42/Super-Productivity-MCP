@@ -37,7 +37,7 @@ An MCP (Model Context Protocol) server that connects AI assistants to <a href="h
 npx -y super-productivity-mcp --extract-plugin
 ```
 
-This extracts `plugin.zip` to your current directory. Alternatively, download it from the [latest release](https://github.com/b0x42/Super-Productivity-MCP/releases/latest). Then:
+This extracts `plugin.zip` to your current directory. Alternatively, download `plugin.zip` from the [latest release](https://github.com/b0x42/Super-Productivity-MCP/releases/latest) page on GitHub. Then:
 
 1. Open Super Productivity → Settings → Plugins
 2. Click "Upload Plugin" and select `plugin.zip`
