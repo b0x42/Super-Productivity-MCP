@@ -12,6 +12,7 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "prepublishOnly": "npm run build",
     "build:plugin": "cd plugin && zip -r ../dist/plugin.zip manifest.json plugin.js index.html icon.svg"
