@@ -31,11 +31,11 @@ An MCP (Model Context Protocol) server that connects AI assistants to <a href="h
 
 ## Installation
 
-### 1. Install the SP Plugin
+### 1. Install (or Update) the SP Plugin
 
 **Option A — via npx:**
 ```bash
-npx -y super-productivity-mcp --extract-plugin
+npx -y super-productivity-mcp@latest --extract-plugin
 ```
 
 **Option B — manual download:**
@@ -46,6 +46,8 @@ Then:
 1. Open Super Productivity → Settings → Plugins
 2. Click "Upload Plugin" and select `plugin.zip`
 3. Restart Super Productivity
+
+> **Note:** Both the MCP server and the SP plugin must be on the same version. After updating one, always update the other. To check which version is running, ask your AI assistant: *"Check the Super Productivity connection"*
 
 ### 2. Configure Your MCP Client
 
