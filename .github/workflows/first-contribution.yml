@@ -16,12 +16,12 @@ jobs:
     steps:
       - uses: actions/first-interaction@v3
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          pr-message: |
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          pr_message: |
             Hello there @${{ github.actor }}! 👋
 
             Thank you and congrats 🎉 for opening your first PR! We will try to review it soon!
-          issue-message: |
+          issue_message: |
             Hello there @${{ github.actor }}! 👋
 
             Thank you for opening your first issue! We will try to respond soon!
