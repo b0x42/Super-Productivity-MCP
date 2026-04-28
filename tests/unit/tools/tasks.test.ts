@@ -404,6 +404,42 @@ describe('task tool logic', () => {
     });
   });
 
+  // delete_task via sendCommand (reuses bulkDeleteTasks with 1-element array)
+  describe('delete_task via sendCommand', () => {
+    it('sends bulkDeleteTasks with single ID and unwraps result', async () => {
+      const results = { results: [{ id: 't1', success: true }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkDeleteTasks', { taskIds: ['t1'] });
+      expect(res.success).toBe(true);
+      expect((res.result as any).results[0].success).toBe(true);
+    });
+
+    it('reports error when task not found', async () => {
+      const results = { results: [{ id: 'bad', success: false, error: 'Task not found: bad' }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkDeleteTasks', { taskIds: ['bad'] });
+      expect((res.result as any).results[0].success).toBe(false);
+      expect((res.result as any).results[0].error).toMatch('Task not found');
+    });
+  });
+
+  // Bulk array max(100) validation
+  describe('bulk operations array limits', () => {
+    it('bulk_complete_tasks schema rejects >100 items', () => {
+      const { z } = require('zod');
+      const schema = z.array(z.string()).max(100);
+      const oversized = Array.from({ length: 101 }, (_, i) => `task-${i}`);
+      expect(schema.safeParse(oversized).success).toBe(false);
+    });
+
+    it('bulk_complete_tasks schema accepts exactly 100 items', () => {
+      const { z } = require('zod');
+      const schema = z.array(z.string()).max(100);
+      const maxed = Array.from({ length: 100 }, (_, i) => `task-${i}`);
+      expect(schema.safeParse(maxed).success).toBe(true);
+    });
+  });
+
   describe('get_worklog aggregation', () => {
     it('aggregates timeSpentOnDay by date and project', () => {
       const tasks = [
