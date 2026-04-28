@@ -1,8 +1,8 @@
 <!--
   Sync Impact Report
-  Version change: 1.1.0 → 1.2.0 (minor — added principle X)
+  Version change: 1.2.0 → 1.3.0 (minor — added principle XI)
   Added principles:
-    - X. Comment the Why, Not the What
+    - XI. Test-Driven Development
   Modified principles: none
   Templates requiring updates: none
   Follow-up TODOs: none
@@ -115,6 +115,22 @@ This is an open-source project. All source code MUST include comments that expla
 
 Rationale: Contributors and future maintainers need to understand *why* the code is shaped the way it is. Good comments reduce onboarding time and prevent well-intentioned refactors from breaking subtle invariants.
 
+### XI. Test-Driven Development (NON-NEGOTIABLE)
+
+Red → Green → Refactor. No exceptions.
+
+- Tests MUST be written before or alongside implementation — never after.
+- No PR may be merged if it introduces untested code paths in the tools or IPC layers.
+- Test pyramid:
+  - **Unit tests**: All tool logic, filter functions, and data transformations (`vitest`)
+  - **Integration tests**: Full command → response round-trips with mocked filesystem
+  - **Manual tests**: Plugin behaviour against SP >= 14.0.0 (timer, delete, reorder)
+- Mocks are permitted in unit tests; integration tests MUST use real filesystem operations (temp directories).
+- Bulk operations and partial-success paths MUST have explicit tests for both success and failure cases.
+- Filter logic MUST be tested with boundary values (today vs yesterday, empty sets, mutually exclusive combinations).
+
+Rationale: This is an IPC bridge where silent failures are the worst outcome. Tests are the only way to verify correctness without a running SP instance. The file-based architecture makes mocking straightforward — there is no excuse for untested code.
+
 ## Technology Stack
 
 - **Runtime**: Node.js >= 18
@@ -169,4 +185,4 @@ This constitution supersedes all other development practices for this project. A
 
 All implementation decisions MUST be traceable to a principle in this document. If a decision cannot be justified by an existing principle, propose an amendment first.
 
-**Version**: 1.2.0 | **Ratified**: 2026-04-20 | **Last Amended**: 2026-04-20
+**Version**: 1.3.0 | **Ratified**: 2026-04-20 | **Last Amended**: 2026-04-28
