@@ -75,6 +75,25 @@ Ask your AI assistant: *"Check the Super Productivity connection"*
 
 > **💡 Plugin not responding?** If the connection check fails after a fresh install or reboot, toggle the plugin off and on again in Settings → Plugins. This is a [known SP issue](https://github.com/super-productivity/super-productivity/issues/7326) where the `nodeExecution` permission isn't ready when the plugin first loads.
 
+## What You Can Do
+
+Here are a few things you can ask your AI assistant once connected:
+
+**☀️ Morning Triage**
+> "Show me my tasks for today and anything overdue"
+
+The assistant retrieves your planned tasks and overdue items, presents a summary, and asks what to tackle first. Say "start the report task" and it kicks off the timer.
+
+**🧹 Batch Inbox Cleanup**
+> "Tag all my unscheduled tasks in the Work project with #backlog and set them due next Friday"
+
+Filters unscheduled tasks, bulk-updates due dates, and adds tags — all in one conversation turn.
+
+**🌙 End-of-Day Wrap-up**
+> "What did I work on today? Complete anything I finished and show me a summary"
+
+Pulls your worklog, stops the running timer, marks tasks done in bulk, and gives you a time summary.
+
 ## Available Tools
 
 | Tool | Description |
