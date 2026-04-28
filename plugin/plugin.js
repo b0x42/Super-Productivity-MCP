@@ -174,9 +174,20 @@ async function executeCommand(command) {
         result = tasks;
         break;
       }
-      case 'updateTask':
-        result = await PluginAPI.updateTask(command.taskId, command.data || {});
+      case 'updateTask': {
+        const updateData = command.data || {};
+        // SP auto-sets plannedAt when dueDay changes. Preserve existing value unless
+        // caller explicitly included plannedAt in the update.
+        if ('dueDay' in updateData && !('plannedAt' in updateData)) {
+          const allTasksForUpdate = await PluginAPI.getTasks();
+          const taskForUpdate = allTasksForUpdate.find(t => t.id === command.taskId);
+          const currentPlannedAt = taskForUpdate ? (taskForUpdate.plannedAt ?? null) : null;
+          result = await PluginAPI.updateTask(command.taskId, { ...updateData, plannedAt: currentPlannedAt });
+        } else {
+          result = await PluginAPI.updateTask(command.taskId, updateData);
+        }
         break;
+      }
       case 'setTaskDone':
         result = await PluginAPI.updateTask(command.taskId, { isDone: true, doneOn: Date.now() });
         break;
@@ -376,7 +387,7 @@ async function pollCommands() {
           const fp = path.join(dir, f);
           try {
             const stat = fs.statSync(fp);
-            if (stat.mtimeMs > since) {
+            if (stat.mtimeMs >= since) {
               cmds.push({ file: f, path: fp, data: JSON.parse(fs.readFileSync(fp, 'utf-8')), mtime: stat.mtimeMs });
             }
           } catch (e) {}
