@@ -14,6 +14,7 @@ interface TaskRecord {
   tagIds: string[];
   dueDay?: string | null;
   dueWithTime?: number | null;
+  plannedAt?: number | null;
   timeSpentOnDay?: Record<string, number>;
   timeEstimate: number;
   timeSpent: number;
@@ -45,7 +46,7 @@ export function applyTriageFilters(
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const startOfTomorrow = startOfToday + 86_400_000;
     result = result.filter(t => {
-      const p = (t as Record<string, unknown>).plannedAt as number | null | undefined;
+      const p = t.plannedAt;
       return p != null && p >= startOfToday && p < startOfTomorrow;
     });
   }
@@ -334,6 +335,25 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       const res = await sendCommand(dirs, 'bulkUpdateTasks', { updates: mapped });
       if (!res.success) return errorResult(res.error ?? 'Failed to bulk update tasks');
       return okResult(res.result);
+    },
+  );
+
+  // delete_task — delete a single task permanently
+  server.registerTool(
+    'delete_task',
+    {
+      description: 'Delete a task permanently. Deleting a parent also removes its subtasks.',
+      inputSchema: {
+        task_id: z.string().describe('Task ID to delete'),
+      },
+    },
+    async ({ task_id }) => {
+      if (!task_id?.trim()) return errorResult('task_id is required');
+      const res = await sendCommand(dirs, 'bulkDeleteTasks', { taskIds: [task_id] });
+      if (!res.success) return errorResult(res.error ?? 'Failed to delete task');
+      const results = (res.result as { results: Array<{ success: boolean; error?: string }> })?.results;
+      if (results?.[0] && !results[0].success) return errorResult(results[0].error ?? 'Failed to delete task');
+      return okResult(null);
     },
   );
 

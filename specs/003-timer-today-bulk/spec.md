@@ -103,8 +103,8 @@ An AI agent performing triage or batch processing wants to complete, update, or 
 
 ## Assumptions
 
-- `start_task` uses SP's native `setActiveTask` or equivalent PluginAPI method
-- `stop_task` uses SP's native `unsetActiveTask` or equivalent PluginAPI method
+- `start_task` uses `dispatchAction` with NgRx action `[Task] Set Current Task` (no native PluginAPI method exists)
+- `stop_task` uses `dispatchAction` with NgRx action `[Task] Unset Current Task` (no native PluginAPI method exists)
 - SP's `plannedAt` is a Unix ms timestamp set when a task is moved to "Today" view
 - A task is "planned for today" if `plannedAt` falls between `startOfToday` and `endOfToday` in local timezone
 - `bulk_delete_tasks` removes tasks permanently (not archive) — matches SP's delete behaviour

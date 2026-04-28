@@ -310,6 +310,9 @@ async function executeCommand(command) {
         break;
       }
       case 'bulkDeleteTasks': {
+        // Snapshot read: if a parent delete cascades to subtasks, later IDs referencing
+        // those subtasks may dispatch with stale objects. This is safe because
+        // dispatchAction is fire-and-forget and SP ignores deletes for missing tasks.
         // No native deleteTask in PluginAPI — use dispatchAction with NgRx action.
         const allTasksForDelete = await PluginAPI.getTasks();
         const results = [];
