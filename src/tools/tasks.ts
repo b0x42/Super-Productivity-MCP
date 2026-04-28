@@ -293,7 +293,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     {
       description: 'Mark multiple tasks as complete in a single operation. Uses partial-success semantics: each task reports its own success/error.',
       inputSchema: {
-        task_ids: z.array(z.string()).describe('Array of task IDs to complete'),
+        task_ids: z.array(z.string()).max(100).describe('Array of task IDs to complete'),
       },
     },
     async ({ task_ids }) => {
@@ -317,7 +317,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
           tag_ids: z.array(z.string()).optional().describe('Replace all tags'),
           time_estimate: z.number().optional().describe('Time estimate in ms'),
           time_spent: z.number().optional().describe('Time spent in ms'),
-        })).describe('Array of task updates'),
+        })).max(100).describe('Array of task updates'),
       },
     },
     async ({ updates }) => {
@@ -363,7 +363,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     {
       description: 'Delete multiple tasks permanently in a single operation. Deleting a parent also removes its subtasks. Uses partial-success semantics.',
       inputSchema: {
-        task_ids: z.array(z.string()).describe('Array of task IDs to delete'),
+        task_ids: z.array(z.string()).max(100).describe('Array of task IDs to delete'),
       },
     },
     async ({ task_ids }) => {
