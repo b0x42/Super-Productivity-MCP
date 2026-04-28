@@ -10,9 +10,10 @@ An MCP (Model Context Protocol) server that connects AI assistants to <a href="h
 
 ## Features
 
-- **Task Management**: Create, list, update, and complete tasks
+- **Task Management**: Create, list, update, complete, and delete tasks (including bulk operations)
+- **Time Tracking**: Start/stop the timer on any task, get the currently tracked task
 - **Tag Operations**: Add or remove individual tags without touching other tags; bulk-replace via `update_task`
-- **Triage Filters**: Filter by `parents_only`, `overdue`, or `unscheduled` — combinable with all existing filters
+- **Triage Filters**: Filter by `parents_only`, `overdue`, `unscheduled`, or `planned_for_today` — combinable with all existing filters
 - **Task Organisation**: Move tasks between projects, reorder tasks within a project or parent, get the currently tracked task
 - **Daily Planning**: Move tasks to Today for planning — set due dates to schedule your day
 - **Project & Tag Management**: Create, list, and update projects and tags
@@ -21,7 +22,7 @@ An MCP (Model Context Protocol) server that connects AI assistants to <a href="h
 - **Notifications**: Show snackbar messages in SP's UI
 - **Diagnostics**: Connection health check and directory debugging
 - **Cross-Platform**: macOS (incl. App Store sandbox), Linux (incl. Snap), Windows
-- **19 MCP Tools** with input validation and clear error messages
+- **24 MCP Tools** with input validation and clear error messages
 
 ## Prerequisites
 
@@ -79,9 +80,14 @@ Ask your AI assistant: *"Check the Super Productivity connection"*
 | Tool | Description |
 |------|-------------|
 | `create_task` | Create a task (supports SP short syntax) |
-| `get_tasks` | List tasks with filters (project, tag, done, archived, search, parents_only, overdue, unscheduled) |
+| `get_tasks` | List tasks with filters (project, tag, done, archived, search, parents_only, overdue, unscheduled, planned_for_today) |
 | `update_task` | Update task fields (title, notes, done, due date, time, tag_ids) |
 | `complete_task` | Mark a task as complete |
+| `start_task` | Start the time tracker on a task |
+| `stop_task` | Stop the currently running time tracker |
+| `bulk_complete_tasks` | Mark multiple tasks as complete in one operation |
+| `bulk_update_tasks` | Update multiple tasks in one operation |
+| `bulk_delete_tasks` | Delete multiple tasks permanently in one operation |
 | `add_tag_to_task` | Add a single tag without replacing other tags (idempotent) |
 | `remove_tag_from_task` | Remove a single tag; returns error if tag is not on the task |
 | `move_task_to_project` | Move a top-level task to a different project |

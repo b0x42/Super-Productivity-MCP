@@ -280,6 +280,91 @@ describe('task tool logic', () => {
     });
   });
 
+  // T008: US2 — planned_for_today filter (003-FR-006)
+  describe('get_tasks planned_for_today filter', () => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const tasks = [
+      { id: '1', title: 'Planned today', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: startOfToday + 3600000 },
+      { id: '2', title: 'Planned yesterday', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: startOfToday - 86400000 },
+      { id: '3', title: 'Not planned', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: null },
+      { id: '4', title: 'Subtask planned today', isDone: false, projectId: null, tagIds: [], parentId: 'p-1', dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: startOfToday + 1000 },
+    ];
+
+    it('returns only tasks planned for today', () => {
+      const result = applyTriageFilters(tasks, { plannedForToday: true });
+      expect(result.map(t => t.id)).toEqual(['1', '4']);
+    });
+
+    it('excludes tasks planned yesterday', () => {
+      const result = applyTriageFilters(tasks, { plannedForToday: true });
+      expect(result.find(t => t.id === '2')).toBeUndefined();
+    });
+
+    it('excludes tasks with null plannedAt', () => {
+      const result = applyTriageFilters(tasks, { plannedForToday: true });
+      expect(result.find(t => t.id === '3')).toBeUndefined();
+    });
+
+    it('combines with parents_only (AND logic)', () => {
+      const result = applyTriageFilters(tasks, { plannedForToday: true, parentsOnly: true });
+      expect(result.map(t => t.id)).toEqual(['1']);
+    });
+  });
+
+  // T015: US3 — bulk operations (003-FR-008, 003-FR-009, 003-FR-010)
+  describe('bulk_complete_tasks via sendCommand', () => {
+    it('sends bulkCompleteTasks with task IDs', async () => {
+      const results = { results: [{ id: 't1', success: true }, { id: 't2', success: true }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkCompleteTasks', { taskIds: ['t1', 't2'] });
+      expect(res.success).toBe(true);
+      expect(res.result).toEqual(results);
+    });
+
+    it('handles partial failure', async () => {
+      const results = { results: [{ id: 't1', success: true }, { id: 'bad', success: false, error: 'Task not found: bad' }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkCompleteTasks', { taskIds: ['t1', 'bad'] });
+      expect(res.success).toBe(true);
+      expect((res.result as any).results[1].success).toBe(false);
+    });
+
+    it('returns empty results for empty array', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({ results: [] }));
+      const res = await sendCommand(dirs, 'bulkCompleteTasks', { taskIds: [] });
+      expect(res.success).toBe(true);
+      expect((res.result as any).results).toEqual([]);
+    });
+  });
+
+  describe('bulk_update_tasks via sendCommand', () => {
+    it('sends bulkUpdateTasks with updates array', async () => {
+      const results = { results: [{ id: 't1', success: true }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkUpdateTasks', { updates: [{ taskId: 't1', data: { dueDay: '2026-05-01' } }] });
+      expect(res.success).toBe(true);
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'bulkUpdateTasks', { updates: [{ taskId: 't1', data: { dueDay: '2026-05-01' } }] });
+    });
+  });
+
+  describe('bulk_delete_tasks via sendCommand', () => {
+    it('sends bulkDeleteTasks with task IDs', async () => {
+      const results = { results: [{ id: 't1', success: true }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkDeleteTasks', { taskIds: ['t1'] });
+      expect(res.success).toBe(true);
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'bulkDeleteTasks', { taskIds: ['t1'] });
+    });
+
+    it('handles not-found errors per item', async () => {
+      const results = { results: [{ id: 'bad', success: false, error: 'Task not found: bad' }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkDeleteTasks', { taskIds: ['bad'] });
+      expect((res.result as any).results[0].success).toBe(false);
+    });
+  });
+
   // T006: US1 — timer control operations (003-FR-001, 003-FR-002)
   describe('start_task via sendCommand', () => {
     it('sends startTask with taskId', async () => {

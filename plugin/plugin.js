@@ -283,6 +283,52 @@ async function executeCommand(command) {
         result = null;
         break;
       }
+      case 'bulkCompleteTasks': {
+        const results = [];
+        for (const id of (command.taskIds || [])) {
+          try {
+            await PluginAPI.updateTask(id, { isDone: true, doneOn: Date.now() });
+            results.push({ id, success: true });
+          } catch (e) {
+            results.push({ id, success: false, error: e.message || String(e) });
+          }
+        }
+        result = { results };
+        break;
+      }
+      case 'bulkUpdateTasks': {
+        const results = [];
+        for (const item of (command.updates || [])) {
+          try {
+            await PluginAPI.updateTask(item.taskId, item.data || {});
+            results.push({ id: item.taskId, success: true });
+          } catch (e) {
+            results.push({ id: item.taskId, success: false, error: e.message || String(e) });
+          }
+        }
+        result = { results };
+        break;
+      }
+      case 'bulkDeleteTasks': {
+        // No native deleteTask in PluginAPI — use dispatchAction with NgRx action.
+        const allTasksForDelete = await PluginAPI.getTasks();
+        const results = [];
+        for (const id of (command.taskIds || [])) {
+          const task = allTasksForDelete.find(t => t.id === id);
+          if (!task) {
+            results.push({ id, success: false, error: `Task not found: ${id}` });
+          } else {
+            try {
+              PluginAPI.dispatchAction({ type: '[Task] Delete Task', payload: { task } });
+              results.push({ id, success: true });
+            } catch (e) {
+              results.push({ id, success: false, error: e.message || String(e) });
+            }
+          }
+        }
+        result = { results };
+        break;
+      }
       case 'startTask': {
         // No native PluginAPI method for timer control — use dispatchAction with NgRx action.
         // Requires full task object as payload (not just ID).
