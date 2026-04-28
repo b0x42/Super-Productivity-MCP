@@ -339,41 +339,6 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     },
   );
 
-  // delete_task — delete a single task permanently
-  server.registerTool(
-    'delete_task',
-    {
-      description: 'Delete a task permanently. Deleting a parent also removes its subtasks.',
-      inputSchema: {
-        task_id: z.string().describe('Task ID to delete'),
-      },
-    },
-    async ({ task_id }) => {
-      if (!task_id?.trim()) return errorResult('task_id is required');
-      const res = await sendCommand(dirs, 'bulkDeleteTasks', { taskIds: [task_id] });
-      if (!res.success) return errorResult(res.error ?? 'Failed to delete task');
-      const results = (res.result as { results: Array<{ success: boolean; error?: string }> })?.results;
-      if (results?.[0] && !results[0].success) return errorResult(results[0].error ?? 'Failed to delete task');
-      return okResult(null);
-    },
-  );
-
-  // bulk_delete_tasks (003-FR-010 — delete multiple tasks permanently)
-  server.registerTool(
-    'bulk_delete_tasks',
-    {
-      description: 'Delete multiple tasks permanently in a single operation. Deleting a parent also removes its subtasks. Uses partial-success semantics.',
-      inputSchema: {
-        task_ids: z.array(z.string()).max(100).describe('Array of task IDs to delete'),
-      },
-    },
-    async ({ task_ids }) => {
-      const res = await sendCommand(dirs, 'bulkDeleteTasks', { taskIds: task_ids ?? [] });
-      if (!res.success) return errorResult(res.error ?? 'Failed to bulk delete tasks');
-      return okResult(res.result);
-    },
-  );
-
   // move_task_to_project (FR-008 — move top-level task; error on subtask)
   server.registerTool(
     'move_task_to_project',

@@ -10,7 +10,7 @@ An MCP (Model Context Protocol) server that connects AI assistants to <a href="h
 
 ## Features
 
-- **Task Management**: Create, list, update, complete, and delete tasks (including bulk operations)
+- **Task Management**: Create, list, update, and complete tasks (including bulk operations)
 - **Time Tracking**: Start/stop the timer on any task, get the currently tracked task
 - **Tag Operations**: Add or remove individual tags without touching other tags; bulk-replace via `update_task`
 - **Triage Filters**: Filter by `parents_only`, `overdue`, `unscheduled`, or `planned_for_today` — combinable with all existing filters
@@ -22,7 +22,7 @@ An MCP (Model Context Protocol) server that connects AI assistants to <a href="h
 - **Notifications**: Show snackbar messages in SP's UI
 - **Diagnostics**: Connection health check and directory debugging
 - **Cross-Platform**: macOS (incl. App Store sandbox), Linux (incl. Snap), Windows
-- **25 MCP Tools** with input validation and clear error messages
+- **23 MCP Tools** with input validation and clear error messages
 
 ## Prerequisites
 
@@ -106,8 +106,6 @@ Pulls your worklog, stops the running timer, marks tasks done in bulk, and gives
 | `stop_task` | Stop the currently running time tracker |
 | `bulk_complete_tasks` | Mark multiple tasks as complete in one operation |
 | `bulk_update_tasks` | Update multiple tasks in one operation |
-| `delete_task` | Delete a task permanently |
-| `bulk_delete_tasks` | Delete multiple tasks permanently in one operation |
 | `add_tag_to_task` | Add a single tag without replacing other tags (idempotent) |
 | `remove_tag_from_task` | Remove a single tag; returns error if tag is not on the task |
 | `move_task_to_project` | Move a top-level task to a different project |

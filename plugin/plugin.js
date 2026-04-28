@@ -315,29 +315,6 @@ async function executeCommand(command) {
         result = { results };
         break;
       }
-      case 'bulkDeleteTasks': {
-        // PluginAPI has no deleteTask method and dispatchAction has a whitelist that
-        // doesn't include [Task] Delete Task. As a workaround, we remove the task from
-        // its project's taskIds and mark it done+archived. This effectively hides it.
-        // TODO: If SP adds a deleteTask API method, switch to that.
-        const allTasksForDelete = await PluginAPI.getTasks();
-        const results = [];
-        for (const id of (command.taskIds || [])) {
-          const task = allTasksForDelete.find(t => t.id === id);
-          if (!task) {
-            results.push({ id, success: false, error: `Task not found: ${id}` });
-          } else {
-            try {
-              await PluginAPI.updateTask(id, { isDone: true, doneOn: Date.now() });
-              results.push({ id, success: true });
-            } catch (e) {
-              results.push({ id, success: false, error: e.message || String(e) });
-            }
-          }
-        }
-        result = { results };
-        break;
-      }
       case 'startTask': {
         // PluginAPI has no native timer control method, and dispatchAction has a whitelist
         // that doesn't include task actions. Instead, we use updateTask to set currentTimestamp

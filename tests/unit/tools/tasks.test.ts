@@ -348,23 +348,6 @@ describe('task tool logic', () => {
     });
   });
 
-  describe('bulk_delete_tasks via sendCommand', () => {
-    it('sends bulkDeleteTasks with task IDs', async () => {
-      const results = { results: [{ id: 't1', success: true }] };
-      mockSend.mockResolvedValueOnce(mockResponse(results));
-      const res = await sendCommand(dirs, 'bulkDeleteTasks', { taskIds: ['t1'] });
-      expect(res.success).toBe(true);
-      expect(mockSend).toHaveBeenCalledWith(dirs, 'bulkDeleteTasks', { taskIds: ['t1'] });
-    });
-
-    it('handles not-found errors per item', async () => {
-      const results = { results: [{ id: 'bad', success: false, error: 'Task not found: bad' }] };
-      mockSend.mockResolvedValueOnce(mockResponse(results));
-      const res = await sendCommand(dirs, 'bulkDeleteTasks', { taskIds: ['bad'] });
-      expect((res.result as any).results[0].success).toBe(false);
-    });
-  });
-
   // T006: US1 — timer control operations (003-FR-001, 003-FR-002)
   describe('start_task via sendCommand', () => {
     it('sends startTask with taskId', async () => {
@@ -401,25 +384,6 @@ describe('task tool logic', () => {
       mockSend.mockResolvedValueOnce(mockResponse(null));
       const res = await sendCommand(dirs, 'stopTask', {});
       expect(res.success).toBe(true);
-    });
-  });
-
-  // delete_task via sendCommand (reuses bulkDeleteTasks with 1-element array)
-  describe('delete_task via sendCommand', () => {
-    it('sends bulkDeleteTasks with single ID and unwraps result', async () => {
-      const results = { results: [{ id: 't1', success: true }] };
-      mockSend.mockResolvedValueOnce(mockResponse(results));
-      const res = await sendCommand(dirs, 'bulkDeleteTasks', { taskIds: ['t1'] });
-      expect(res.success).toBe(true);
-      expect((res.result as any).results[0].success).toBe(true);
-    });
-
-    it('reports error when task not found', async () => {
-      const results = { results: [{ id: 'bad', success: false, error: 'Task not found: bad' }] };
-      mockSend.mockResolvedValueOnce(mockResponse(results));
-      const res = await sendCommand(dirs, 'bulkDeleteTasks', { taskIds: ['bad'] });
-      expect((res.result as any).results[0].success).toBe(false);
-      expect((res.result as any).results[0].error).toMatch('Task not found');
     });
   });
 
