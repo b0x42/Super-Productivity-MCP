@@ -283,6 +283,27 @@ async function executeCommand(command) {
         result = null;
         break;
       }
+      case 'startTask': {
+        // No native PluginAPI method for timer control — use dispatchAction with NgRx action.
+        // Requires full task object as payload (not just ID).
+        const allTasksForStart = await PluginAPI.getTasks();
+        const taskForStart = allTasksForStart.find(t => t.id === command.taskId);
+        if (!taskForStart) {
+          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+        if (taskForStart.isDone) {
+          return { success: false, error: `Cannot start tracking a completed task: ${command.taskId}`, timestamp: Date.now() };
+        }
+        PluginAPI.dispatchAction({ type: '[Task] Set Current Task', payload: { task: taskForStart } });
+        result = null;
+        break;
+      }
+      case 'stopTask': {
+        // Idempotent — dispatching when no timer is running is a no-op in SP.
+        PluginAPI.dispatchAction({ type: '[Task] Unset Current Task' });
+        result = null;
+        break;
+      }
       case 'ping':
         result = { pong: true, pluginVersion: '1.1.1', protocolVersion: PROTOCOL_VERSION };
         break;

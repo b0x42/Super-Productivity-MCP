@@ -245,6 +245,37 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     },
   );
 
+  // start_task (003-FR-001 — start time tracker on a task)
+  server.registerTool(
+    'start_task',
+    {
+      description: 'Start the time tracker on a task. If another task is being tracked, it will be stopped automatically. Cannot start tracking a completed task.',
+      inputSchema: {
+        task_id: z.string().describe('Task ID to start tracking'),
+      },
+    },
+    async ({ task_id }) => {
+      if (!task_id?.trim()) return errorResult('task_id is required');
+      const res = await sendCommand(dirs, 'startTask', { taskId: task_id });
+      if (!res.success) return errorResult(res.error ?? 'Failed to start task');
+      return okResult(null);
+    },
+  );
+
+  // stop_task (003-FR-002 — stop the currently running timer)
+  server.registerTool(
+    'stop_task',
+    {
+      description: 'Stop the currently running time tracker. Succeeds silently if no timer is running (idempotent).',
+      inputSchema: {},
+    },
+    async () => {
+      const res = await sendCommand(dirs, 'stopTask', {});
+      if (!res.success) return errorResult(res.error ?? 'Failed to stop task');
+      return okResult(null);
+    },
+  );
+
   // move_task_to_project (FR-008 — move top-level task; error on subtask)
   server.registerTool(
     'move_task_to_project',

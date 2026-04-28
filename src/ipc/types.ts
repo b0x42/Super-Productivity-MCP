@@ -13,6 +13,8 @@ export interface Command {
   taskIds?: string[];
   contextId?: string;
   contextType?: 'project' | 'parent';
+  // Fields for bulkUpdateTasks (003-FR-009)
+  updates?: Array<{ taskId: string; data: Record<string, unknown> }>;
 }
 
 export interface TaskFilters {
@@ -25,6 +27,8 @@ export interface TaskFilters {
   parentsOnly?: boolean;
   overdue?: boolean;
   unscheduled?: boolean;
+  // Today filter (003-FR-006) — applied server-side
+  plannedForToday?: boolean;
 }
 
 export interface Response {

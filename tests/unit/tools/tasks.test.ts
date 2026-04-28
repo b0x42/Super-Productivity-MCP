@@ -280,6 +280,45 @@ describe('task tool logic', () => {
     });
   });
 
+  // T006: US1 — timer control operations (003-FR-001, 003-FR-002)
+  describe('start_task via sendCommand', () => {
+    it('sends startTask with taskId', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      const res = await sendCommand(dirs, 'startTask', { taskId: 'task-1' });
+      expect(res.success).toBe(true);
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'startTask', { taskId: 'task-1' });
+    });
+
+    it('propagates error when task not found', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Task not found: task-x', timestamp: Date.now() });
+      const res = await sendCommand(dirs, 'startTask', { taskId: 'task-x' });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch('Task not found');
+    });
+
+    it('propagates error when task is done', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Cannot start tracking a completed task: task-1', timestamp: Date.now() });
+      const res = await sendCommand(dirs, 'startTask', { taskId: 'task-1' });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch('Cannot start tracking a completed task');
+    });
+  });
+
+  describe('stop_task via sendCommand', () => {
+    it('sends stopTask command', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      const res = await sendCommand(dirs, 'stopTask', {});
+      expect(res.success).toBe(true);
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'stopTask', {});
+    });
+
+    it('succeeds even when no timer is running (idempotent)', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      const res = await sendCommand(dirs, 'stopTask', {});
+      expect(res.success).toBe(true);
+    });
+  });
+
   describe('get_worklog aggregation', () => {
     it('aggregates timeSpentOnDay by date and project', () => {
       const tasks = [
