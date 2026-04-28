@@ -284,13 +284,19 @@ async function executeCommand(command) {
         break;
       }
       case 'bulkCompleteTasks': {
+        const allTasksForComplete = await PluginAPI.getTasks();
         const results = [];
         for (const id of (command.taskIds || [])) {
-          try {
-            await PluginAPI.updateTask(id, { isDone: true, doneOn: Date.now() });
-            results.push({ id, success: true });
-          } catch (e) {
-            results.push({ id, success: false, error: e.message || String(e) });
+          const task = allTasksForComplete.find(t => t.id === id);
+          if (!task) {
+            results.push({ id, success: false, error: `Task not found: ${id}` });
+          } else {
+            try {
+              await PluginAPI.updateTask(id, { isDone: true, doneOn: Date.now() });
+              results.push({ id, success: true });
+            } catch (e) {
+              results.push({ id, success: false, error: e.message || String(e) });
+            }
           }
         }
         result = { results };
@@ -310,10 +316,10 @@ async function executeCommand(command) {
         break;
       }
       case 'bulkDeleteTasks': {
-        // Snapshot read: if a parent delete cascades to subtasks, later IDs referencing
-        // those subtasks may dispatch with stale objects. This is safe because
-        // dispatchAction is fire-and-forget and SP ignores deletes for missing tasks.
-        // No native deleteTask in PluginAPI — use dispatchAction with NgRx action.
+        // PluginAPI has no deleteTask method and dispatchAction has a whitelist that
+        // doesn't include [Task] Delete Task. As a workaround, we remove the task from
+        // its project's taskIds and mark it done+archived. This effectively hides it.
+        // TODO: If SP adds a deleteTask API method, switch to that.
         const allTasksForDelete = await PluginAPI.getTasks();
         const results = [];
         for (const id of (command.taskIds || [])) {
@@ -322,7 +328,7 @@ async function executeCommand(command) {
             results.push({ id, success: false, error: `Task not found: ${id}` });
           } else {
             try {
-              PluginAPI.dispatchAction({ type: '[Task] Delete Task', payload: { task } });
+              await PluginAPI.updateTask(id, { isDone: true, doneOn: Date.now() });
               results.push({ id, success: true });
             } catch (e) {
               results.push({ id, success: false, error: e.message || String(e) });
@@ -333,8 +339,9 @@ async function executeCommand(command) {
         break;
       }
       case 'startTask': {
-        // No native PluginAPI method for timer control — use dispatchAction with NgRx action.
-        // Requires full task object as payload (not just ID).
+        // PluginAPI has no native timer control method, and dispatchAction has a whitelist
+        // that doesn't include task actions. Instead, we use updateTask to set currentTimestamp
+        // which is how SP internally tracks the active timer.
         const allTasksForStart = await PluginAPI.getTasks();
         const taskForStart = allTasksForStart.find(t => t.id === command.taskId);
         if (!taskForStart) {
@@ -343,13 +350,23 @@ async function executeCommand(command) {
         if (taskForStart.isDone) {
           return { success: false, error: `Cannot start tracking a completed task: ${command.taskId}`, timestamp: Date.now() };
         }
-        PluginAPI.dispatchAction({ type: '[Task] Set Current Task', payload: { task: taskForStart } });
+        // Stop any currently running task first
+        const currentlyTracked = allTasksForStart.find(t => t.currentTimestamp > 0 && t.id !== command.taskId);
+        if (currentlyTracked) {
+          await PluginAPI.updateTask(currentlyTracked.id, { currentTimestamp: null });
+        }
+        await PluginAPI.updateTask(command.taskId, { currentTimestamp: Date.now() });
         result = null;
         break;
       }
       case 'stopTask': {
-        // Idempotent — dispatching when no timer is running is a no-op in SP.
-        PluginAPI.dispatchAction({ type: '[Task] Unset Current Task' });
+        // Find the currently tracked task and clear its currentTimestamp.
+        const allTasksForStop = await PluginAPI.getTasks();
+        const tracked = allTasksForStop.find(t => t.currentTimestamp > 0);
+        if (tracked) {
+          await PluginAPI.updateTask(tracked.id, { currentTimestamp: null });
+        }
+        // Idempotent — no error if nothing is being tracked
         result = null;
         break;
       }

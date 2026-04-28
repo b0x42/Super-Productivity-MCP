@@ -174,7 +174,8 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       }
       if (due_day !== undefined) {
         data.dueDay = due_day || null;
-        data.plannedAt = due_day ? Date.now() : null;
+        // Don't auto-set plannedAt — due date and "planned for today" are independent concepts.
+        // plannedAt is only set when a task is explicitly moved to Today view.
       }
       if (time_estimate !== undefined) data.timeEstimate = time_estimate;
       if (time_spent !== undefined) data.timeSpent = time_spent;
