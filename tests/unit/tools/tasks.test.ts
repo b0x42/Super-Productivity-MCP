@@ -107,6 +107,28 @@ describe('task tool logic', () => {
         data: { dueDay: null, plannedAt: null },
       }));
     });
+
+    it('sets plannedAt independently without dueDay', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      await sendCommand(dirs, 'updateTask', {
+        taskId: 'task-1',
+        data: { plannedAt: startOfToday.getTime() },
+      });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
+        taskId: 'task-1',
+        data: expect.objectContaining({ plannedAt: startOfToday.getTime() }),
+      }));
+    });
+
+    it('clears plannedAt without touching dueDay', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await sendCommand(dirs, 'updateTask', { taskId: 'task-1', data: { plannedAt: null } });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
+        data: { plannedAt: null },
+      }));
+    });
   });
 
   describe('complete_task via sendCommand', () => {

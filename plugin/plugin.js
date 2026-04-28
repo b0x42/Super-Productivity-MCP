@@ -154,9 +154,10 @@ async function executeCommand(command) {
           result = await PluginAPI.addTask({ ...d, title: cleanTitle });
         }
 
-        // Set dueDay + plannedAt for Today, or clear plannedAt for Inbox
+        // Set dueDay only — plannedAt is independent (due date ≠ planned for today).
+        // Clear both when no @date syntax so inbox tasks don't inherit stale schedules.
         if (result && dueDay) {
-          await PluginAPI.updateTask(result, { dueDay, plannedAt: Date.now() });
+          await PluginAPI.updateTask(result, { dueDay });
         } else if (result) {
           await PluginAPI.updateTask(result, { plannedAt: null, dueDay: null });
         }
