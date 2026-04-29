@@ -426,6 +426,77 @@ describe('task tool logic', () => {
     });
   });
 
+  // 005: Field selection on get_tasks
+  describe('get_tasks field selection', () => {
+    const tasks = [
+      { id: '1', title: 'Task A', isDone: false, projectId: 'p1', tagIds: ['t1'], dueDay: '2026-05-01', timeEstimate: 3600000, timeSpent: 0, parentId: null },
+      { id: '2', title: 'Task B', isDone: true, projectId: 'p2', tagIds: [], dueDay: null, timeEstimate: 0, timeSpent: 1000, parentId: null },
+    ];
+
+    it('returns only specified fields when fields is provided', () => {
+      const fields = ['id', 'title'];
+      const shaped = tasks.map(t => {
+        const obj: Record<string, unknown> = {};
+        for (const f of fields) { if (f in t) obj[f] = (t as Record<string, unknown>)[f]; }
+        return obj;
+      });
+      expect(shaped).toEqual([{ id: '1', title: 'Task A' }, { id: '2', title: 'Task B' }]);
+    });
+
+    it('silently ignores unknown fields', () => {
+      const fields = ['id', 'nonexistent'];
+      const shaped = tasks.map(t => {
+        const obj: Record<string, unknown> = {};
+        for (const f of fields) { if (f in t) obj[f] = (t as Record<string, unknown>)[f]; }
+        return obj;
+      });
+      expect(shaped).toEqual([{ id: '1' }, { id: '2' }]);
+    });
+
+    it('returns full objects when fields is empty', () => {
+      const fields: string[] = [];
+      // Empty fields = no shaping
+      const result = fields.length > 0 ? tasks.map(() => ({})) : tasks;
+      expect(result).toEqual(tasks);
+    });
+  });
+
+  // 005: delete_task via sendCommand
+  describe('delete_task via sendCommand', () => {
+    it('sends deleteTask with taskId', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      const res = await sendCommand(dirs, 'deleteTask', { taskId: 'task-1' });
+      expect(res.success).toBe(true);
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'deleteTask', { taskId: 'task-1' });
+    });
+
+    it('propagates error when task not found', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Task not found: task-x', timestamp: Date.now() });
+      const res = await sendCommand(dirs, 'deleteTask', { taskId: 'task-x' });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch('Task not found');
+    });
+  });
+
+  // 005: create_task_with_subtasks via sendCommand
+  describe('create_task_with_subtasks via sendCommand', () => {
+    it('sends createTaskWithSubtasks and returns parentId + subtaskIds', async () => {
+      const result = { parentId: 'p-1', subtaskIds: ['s-1', 's-2'] };
+      mockSend.mockResolvedValueOnce(mockResponse(result));
+      const res = await sendCommand(dirs, 'createTaskWithSubtasks', {
+        data: { title: 'Plan', subtasks: [{ title: 'Sub 1' }, { title: 'Sub 2' }] },
+      });
+      expect(res.success).toBe(true);
+      expect(res.result).toEqual(result);
+    });
+
+    it('propagates error on failure', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Title is required', timestamp: Date.now() });
+      const res = await sendCommand(dirs, 'createTaskWithSubtasks', { data: { title: '' } });
+      expect(res.success).toBe(false);
+    });
+  });
+
   describe('get_worklog aggregation', () => {
     it('aggregates timeSpentOnDay by date and project', () => {
       const tasks = [

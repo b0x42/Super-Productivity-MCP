@@ -359,6 +359,36 @@ async function executeCommand(command) {
         result = null;
         break;
       }
+      case 'deleteTask': {
+        const allTasksForDelete = await PluginAPI.getTasks();
+        const taskToDelete = allTasksForDelete.find(t => t.id === command.taskId);
+        if (!taskToDelete) {
+          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+        await PluginAPI.deleteTask(command.taskId);
+        result = null;
+        break;
+      }
+      case 'createTaskWithSubtasks': {
+        const parentData = command.data || {};
+        const parentId = await PluginAPI.addTask({
+          title: parentData.title,
+          notes: parentData.notes || '',
+          projectId: parentData.projectId || undefined,
+          tagIds: parentData.tagIds || [],
+        });
+        const subtaskIds = [];
+        for (const sub of (parentData.subtasks || [])) {
+          const subId = await PluginAPI.addTask({
+            title: sub.title,
+            notes: sub.notes || '',
+            parentId,
+          });
+          subtaskIds.push(subId);
+        }
+        result = { parentId, subtaskIds };
+        break;
+      }
       case 'ping':
         result = { pong: true, pluginVersion: '1.2.0', protocolVersion: PROTOCOL_VERSION };
         break;

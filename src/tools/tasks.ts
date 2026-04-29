@@ -116,9 +116,10 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         overdue: z.boolean().optional().default(false).describe('Return only tasks with a due date strictly before today'),
         unscheduled: z.boolean().optional().default(false).describe('Return only tasks with no due date and no scheduled time'),
         planned_for_today: z.boolean().optional().default(false).describe('Return only tasks planned for today (via plannedAt timestamp)'),
+        fields: z.array(z.string()).optional().describe('Return only these fields per task (e.g. ["id", "title", "dueDay"]). Omit for full objects.'),
       },
     },
-    async ({ project_id, tag_id, include_done, include_archived, search_query, parents_only, overdue, unscheduled, planned_for_today }) => {
+    async ({ project_id, tag_id, include_done, include_archived, search_query, parents_only, overdue, unscheduled, planned_for_today, fields }) => {
       const filters: TaskFilters = {
         projectId: project_id,
         tagId: tag_id,
@@ -141,6 +142,16 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
 
       // Triage filters (FR-004, FR-005, FR-006)
       tasks = applyTriageFilters(tasks, { parentsOnly: parents_only, overdue, unscheduled, plannedForToday: planned_for_today });
+
+      // Field selection (005-FR-001)
+      if (fields && fields.length > 0) {
+        const shaped = tasks.map(t => {
+          const obj: Record<string, unknown> = {};
+          for (const f of fields) { if (f in t) obj[f] = (t as Record<string, unknown>)[f]; }
+          return obj;
+        });
+        return okResult(shaped);
+      }
 
       return okResult(tasks);
     },
@@ -373,6 +384,54 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       const res = await sendCommand(dirs, 'reorderTasks', { taskIds: task_ids, contextId: context_id, contextType: context_type });
       if (!res.success) return errorResult(res.error ?? 'Failed to reorder tasks');
       return okResult(null);
+    },
+  );
+
+  // delete_task (005-FR-005)
+  server.registerTool(
+    'delete_task',
+    {
+      description: 'Permanently delete a task. Deleting a parent also removes all subtasks.',
+      inputSchema: {
+        task_id: z.string().describe('Task ID to delete'),
+      },
+    },
+    async ({ task_id }) => {
+      if (!task_id?.trim()) return errorResult('task_id is required');
+      const res = await sendCommand(dirs, 'deleteTask', { taskId: task_id });
+      if (!res.success) return errorResult(res.error ?? 'Failed to delete task');
+      return okResult(null);
+    },
+  );
+
+  // create_task_with_subtasks (005-FR-008)
+  server.registerTool(
+    'create_task_with_subtasks',
+    {
+      description: 'Create a parent task with subtasks in one operation. Returns parentId and subtaskIds.',
+      inputSchema: {
+        title: z.string().describe('Parent task title'),
+        notes: z.string().optional().describe('Parent task notes'),
+        project_id: z.string().optional().describe('Project ID for the parent task'),
+        tag_ids: z.array(z.string()).optional().describe('Tag IDs for the parent task'),
+        subtasks: z.array(z.object({
+          title: z.string().describe('Subtask title'),
+          notes: z.string().optional().describe('Subtask notes'),
+        })).describe('Subtask definitions'),
+      },
+    },
+    async ({ title, notes, project_id, tag_ids, subtasks }) => {
+      if (!title?.trim()) return errorResult('Title is required');
+      const data: Record<string, unknown> = {
+        title,
+        notes: notes ?? '',
+        projectId: project_id,
+        tagIds: tag_ids ?? [],
+        subtasks: subtasks ?? [],
+      };
+      const res = await sendCommand(dirs, 'createTaskWithSubtasks', { data });
+      if (!res.success) return errorResult(res.error ?? 'Failed to create task with subtasks');
+      return okResult(res.result);
     },
   );
 
