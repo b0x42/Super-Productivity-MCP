@@ -7,6 +7,7 @@ import { registerProjectTools } from './tools/projects.js';
 import { registerTagTools } from './tools/tags.js';
 import { registerNotificationTools } from './tools/notifications.js';
 import { registerDiagnosticTools } from './tools/diagnostics.js';
+import { registerResources } from './resources/index.js';
 
 export function createServer(): { server: McpServer; dirs: ResolvedDirs } {
   const dirs = resolveDirectories();
@@ -22,6 +23,7 @@ export function createServer(): { server: McpServer; dirs: ResolvedDirs } {
   registerTagTools(server, dirs);
   registerNotificationTools(server, dirs);
   registerDiagnosticTools(server, dirs);
+  registerResources(server, dirs);
 
   return { server, dirs };
 }
