@@ -25,12 +25,6 @@ Filters unscheduled tasks, bulk-updates due dates, and adds tags — all in one 
 
 Pulls your worklog, stops the running timer, marks tasks done in bulk, and gives you a time summary.
 
-## Prerequisites
-
-- [Super Productivity](https://super-productivity.com) >= 14.0.0
-- Node.js >= 18
-- An MCP-compatible client (Claude Desktop, Kiro, etc.)
-
 ## Installation
 
 ### 1. Install the SP Plugin
@@ -65,6 +59,12 @@ Config file locations:
 ### 3. Verify
 
 Ask your AI assistant: *"Check the Super Productivity connection"*
+
+## Prerequisites
+
+- [Super Productivity](https://super-productivity.com) >= 14.0.0
+- Node.js >= 18
+- An MCP-compatible client (Claude Desktop, Kiro, etc.)
 
 ## Available Tools
 
