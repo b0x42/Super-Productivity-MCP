@@ -71,12 +71,15 @@ Ask your AI assistant: *"Check the Super Productivity connection"*
 | Tool | Description |
 |------|-------------|
 | `create_task` | Create a task (supports SP short syntax) |
-| `get_tasks` | List tasks — filter by project, tag, done, archived, search, `parents_only`, `overdue`, `unscheduled`, `planned_for_today` |
+| `create_task_with_subtasks` | Create a parent task + subtasks in one operation |
+| `get_tasks` | List tasks — filter by project, tag, done, archived, search (title+notes), `parents_only`, `overdue`, `unscheduled`, `planned_for_today`, `recurring_only`, `fields` |
 | `update_task` | Update title, notes, done state, due date, `planned_at`, time, tags |
 | `complete_task` | Mark a task as complete |
+| `delete_task` | Permanently delete a task (parent deletes subtasks too) |
 | `start_task` | Start the time tracker on a task |
 | `stop_task` | Stop the currently running time tracker |
 | `get_current_task` | Get the currently tracked task (null if none) |
+| `plan_tasks_for_today` | Batch plan/unplan tasks for today |
 | `bulk_complete_tasks` | Mark multiple tasks complete in one operation |
 | `bulk_update_tasks` | Update multiple tasks in one operation |
 | `add_tag_to_task` | Add a tag without replacing other tags |
@@ -100,7 +103,7 @@ Include these in task titles and they are parsed automatically:
 
 | Syntax | Example | Effect |
 |--------|---------|--------|
-| `#tag` | `Buy milk #errands` | Adds the "errands" tag |
+| `#tag` | `Buy milk #shopping` | Adds the "shopping" tag |
 | `+project` | `Fix bug +work` | Assigns to "work" project (prefix match, min 3 chars) |
 | `@due` | `Report @friday` | Sets due date to Friday |
 | `@due time` | `Call @tomorrow 3pm` | Sets due date and time |
