@@ -66,3 +66,8 @@ SP has no IndexedDB indexes on `tagIds`/`projectId` — filtering is always O(n)
 ## Specs
 
 For feature specifications and implementation plans, see `specs/` directory.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
