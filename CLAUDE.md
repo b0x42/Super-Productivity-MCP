@@ -1,8 +1,6 @@
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan at
-[specs/002-task-tag-triage-ops/plan.md](specs/002-task-tag-triage-ops/plan.md)
-<!-- SPECKIT END -->
+# Agent Instructions
+
+> **Primary file: [AGENTS.md](AGENTS.md)** — this file mirrors it for Claude Code compatibility.
 
 ## Commands
 
@@ -17,12 +15,12 @@ npm run lint         # eslint src/
 
 ## Architecture
 
-Two components:
+Two components communicating via file-based IPC:
 
 - **MCP server** (`src/`) — TypeScript, built with tsup
 - **SP plugin** (`plugin/`) — JavaScript + HTML, loaded into Super Productivity
 
-Communication via file-based IPC: plugin writes responses to `plugin_responses/`, server reads; server writes commands to `plugin_commands/`, plugin polls.
+Plugin writes responses to `plugin_responses/`, server reads. Server writes commands to `plugin_commands/`, plugin polls.
 
 ```
 src/
@@ -48,6 +46,7 @@ tests/
 ## Key Patterns
 
 Tools follow this shape:
+
 ```ts
 server.registerTool('tool_name', { description, inputSchema }, async (args) => {
   const res = await sendCommand(dirs, 'spAction', { ...args });
@@ -63,3 +62,7 @@ SP has no IndexedDB indexes on `tagIds`/`projectId` — filtering is always O(n)
 - `npx tsc` pulls a wrong package — always use `npm run typecheck`
 - `npm run build` also runs `build:plugin` (zips `plugin/` → `dist/plugin.zip`) — don't run tsup alone
 - TypeScript 6 requires `"types": ["node"]` in tsconfig (already set) — removing it breaks all `node:` imports
+
+## Specs
+
+For feature specifications and implementation plans, see `specs/` directory.

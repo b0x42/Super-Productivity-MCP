@@ -14,6 +14,7 @@ interface TaskRecord {
   tagIds: string[];
   dueDay?: string | null;
   dueWithTime?: number | null;
+  plannedAt?: number | null;
   timeSpentOnDay?: Record<string, number>;
   timeEstimate: number;
   timeSpent: number;
@@ -31,7 +32,7 @@ export function localDateStr(d: Date = new Date()): string {
 /** Apply triage filters to a task list. Exported for testability. */
 export function applyTriageFilters(
   tasks: TaskRecord[],
-  opts: { parentsOnly?: boolean; overdue?: boolean; unscheduled?: boolean },
+  opts: { parentsOnly?: boolean; overdue?: boolean; unscheduled?: boolean; plannedForToday?: boolean },
 ): TaskRecord[] {
   let result = tasks;
   if (opts.parentsOnly) result = result.filter(t => !t.parentId);
@@ -40,6 +41,15 @@ export function applyTriageFilters(
     result = result.filter(t => t.dueDay != null && (t.dueDay as string) < today);
   }
   if (opts.unscheduled) result = result.filter(t => !t.dueDay && !t.dueWithTime);
+  if (opts.plannedForToday) {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startOfTomorrow = startOfToday + 86_400_000;
+    result = result.filter(t => {
+      const p = t.plannedAt;
+      return p != null && p >= startOfToday && p < startOfTomorrow;
+    });
+  }
   return result;
 }
 
@@ -105,9 +115,10 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         parents_only: z.boolean().optional().default(false).describe('Exclude subtasks — return only top-level tasks'),
         overdue: z.boolean().optional().default(false).describe('Return only tasks with a due date strictly before today'),
         unscheduled: z.boolean().optional().default(false).describe('Return only tasks with no due date and no scheduled time'),
+        planned_for_today: z.boolean().optional().default(false).describe('Return only tasks planned for today (via plannedAt timestamp)'),
       },
     },
-    async ({ project_id, tag_id, include_done, include_archived, search_query, parents_only, overdue, unscheduled }) => {
+    async ({ project_id, tag_id, include_done, include_archived, search_query, parents_only, overdue, unscheduled, planned_for_today }) => {
       const filters: TaskFilters = {
         projectId: project_id,
         tagId: tag_id,
@@ -129,7 +140,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       }
 
       // Triage filters (FR-004, FR-005, FR-006)
-      tasks = applyTriageFilters(tasks, { parentsOnly: parents_only, overdue, unscheduled });
+      tasks = applyTriageFilters(tasks, { parentsOnly: parents_only, overdue, unscheduled, plannedForToday: planned_for_today });
 
       return okResult(tasks);
     },
@@ -146,12 +157,13 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         notes: z.string().optional().describe('New notes'),
         is_done: z.boolean().optional().describe('Mark as done/undone'),
         due_day: z.string().optional().describe('Due date in ISO format (e.g. 2026-04-20), or empty string to clear'),
+        planned_at: z.number().nullable().optional().describe('Unix ms timestamp to plan task for a specific time (e.g. start of today = plan for today). Pass null to unplan. Independent from due_day.'),
         time_estimate: z.number().optional().describe('Time estimate in milliseconds'),
         time_spent: z.number().optional().describe('Time spent in milliseconds'),
         tag_ids: z.array(z.string()).optional().describe('Bulk-replace all tags with this list (FR-003)'),
       },
     },
-    async ({ task_id, title, notes, is_done, due_day, time_estimate, time_spent, tag_ids }) => {
+    async ({ task_id, title, notes, is_done, due_day, planned_at, time_estimate, time_spent, tag_ids }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
 
       const data: Record<string, unknown> = {};
@@ -161,10 +173,8 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         data.isDone = is_done;
         data.doneOn = is_done ? Date.now() : null;
       }
-      if (due_day !== undefined) {
-        data.dueDay = due_day || null;
-        data.plannedAt = due_day ? Date.now() : null;
-      }
+      if (due_day !== undefined) data.dueDay = due_day || null;
+      if (planned_at !== undefined) data.plannedAt = planned_at;
       if (time_estimate !== undefined) data.timeEstimate = time_estimate;
       if (time_spent !== undefined) data.timeSpent = time_spent;
       // tag_ids replaces the entire tag list; use add_tag_to_task / remove_tag_from_task for incremental changes
@@ -242,6 +252,88 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       const res = await sendCommand(dirs, 'loadCurrentTask', {});
       if (!res.success) return errorResult(res.error ?? 'Failed to get current task');
       return okResult(res.result ?? null);
+    },
+  );
+
+  // start_task (003-FR-001 — start time tracker on a task)
+  server.registerTool(
+    'start_task',
+    {
+      description: 'Start the time tracker on a task. If another task is being tracked, it will be stopped automatically. Cannot start tracking a completed task.',
+      inputSchema: {
+        task_id: z.string().describe('Task ID to start tracking'),
+      },
+    },
+    async ({ task_id }) => {
+      if (!task_id?.trim()) return errorResult('task_id is required');
+      const res = await sendCommand(dirs, 'startTask', { taskId: task_id });
+      if (!res.success) return errorResult(res.error ?? 'Failed to start task');
+      return okResult(null);
+    },
+  );
+
+  // stop_task (003-FR-002 — stop the currently running timer)
+  server.registerTool(
+    'stop_task',
+    {
+      description: 'Stop the currently running time tracker. Succeeds silently if no timer is running (idempotent).',
+      inputSchema: {},
+    },
+    async () => {
+      const res = await sendCommand(dirs, 'stopTask', {});
+      if (!res.success) return errorResult(res.error ?? 'Failed to stop task');
+      return okResult(null);
+    },
+  );
+
+  // bulk_complete_tasks (003-FR-008 — mark multiple tasks done in one round-trip)
+  server.registerTool(
+    'bulk_complete_tasks',
+    {
+      description: 'Mark multiple tasks as complete in a single operation. Uses partial-success semantics: each task reports its own success/error.',
+      inputSchema: {
+        task_ids: z.array(z.string()).max(100).describe('Array of task IDs to complete'),
+      },
+    },
+    async ({ task_ids }) => {
+      const res = await sendCommand(dirs, 'bulkCompleteTasks', { taskIds: task_ids ?? [] });
+      if (!res.success) return errorResult(res.error ?? 'Failed to bulk complete tasks');
+      return okResult(res.result);
+    },
+  );
+
+  // bulk_update_tasks (003-FR-009 — apply different updates to multiple tasks)
+  server.registerTool(
+    'bulk_update_tasks',
+    {
+      description: 'Update multiple tasks in a single operation. Each item specifies a task_id and the fields to update. Uses partial-success semantics.',
+      inputSchema: {
+        updates: z.array(z.object({
+          task_id: z.string().describe('Task ID to update'),
+          title: z.string().optional().describe('New title'),
+          notes: z.string().optional().describe('New notes'),
+          due_day: z.string().optional().describe('Due date (YYYY-MM-DD) or empty string to clear'),
+          tag_ids: z.array(z.string()).optional().describe('Replace all tags'),
+          time_estimate: z.number().optional().describe('Time estimate in ms'),
+          time_spent: z.number().optional().describe('Time spent in ms'),
+        })).max(100).describe('Array of task updates'),
+      },
+    },
+    async ({ updates }) => {
+      const mapped = (updates ?? []).map(u => ({
+        taskId: u.task_id,
+        data: {
+          ...(u.title !== undefined && { title: u.title }),
+          ...(u.notes !== undefined && { notes: u.notes }),
+          ...(u.due_day !== undefined && { dueDay: u.due_day || null }),
+          ...(u.tag_ids !== undefined && { tagIds: u.tag_ids }),
+          ...(u.time_estimate !== undefined && { timeEstimate: u.time_estimate }),
+          ...(u.time_spent !== undefined && { timeSpent: u.time_spent }),
+        },
+      }));
+      const res = await sendCommand(dirs, 'bulkUpdateTasks', { updates: mapped });
+      if (!res.success) return errorResult(res.error ?? 'Failed to bulk update tasks');
+      return okResult(res.result);
     },
   );
 

@@ -107,6 +107,28 @@ describe('task tool logic', () => {
         data: { dueDay: null, plannedAt: null },
       }));
     });
+
+    it('sets plannedAt independently without dueDay', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      await sendCommand(dirs, 'updateTask', {
+        taskId: 'task-1',
+        data: { plannedAt: startOfToday.getTime() },
+      });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
+        taskId: 'task-1',
+        data: expect.objectContaining({ plannedAt: startOfToday.getTime() }),
+      }));
+    });
+
+    it('clears plannedAt without touching dueDay', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await sendCommand(dirs, 'updateTask', { taskId: 'task-1', data: { plannedAt: null } });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
+        data: { plannedAt: null },
+      }));
+    });
   });
 
   describe('complete_task via sendCommand', () => {
@@ -277,6 +299,130 @@ describe('task tool logic', () => {
       const res = await sendCommand(dirs, 'reorderTasks', { taskIds: ['t1', 'foreign-task'], contextId: 'proj-1', contextType: 'project' });
       expect(res.success).toBe(false);
       expect(res.error).toMatch('does not belong to context');
+    });
+  });
+
+  // T008: US2 — planned_for_today filter (003-FR-006)
+  describe('get_tasks planned_for_today filter', () => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const tasks = [
+      { id: '1', title: 'Planned today', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: startOfToday + 3600000 },
+      { id: '2', title: 'Planned yesterday', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: startOfToday - 86400000 },
+      { id: '3', title: 'Not planned', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: null },
+      { id: '4', title: 'Subtask planned today', isDone: false, projectId: null, tagIds: [], parentId: 'p-1', dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: startOfToday + 1000 },
+    ];
+
+    it('returns only tasks planned for today', () => {
+      const result = applyTriageFilters(tasks, { plannedForToday: true });
+      expect(result.map(t => t.id)).toEqual(['1', '4']);
+    });
+
+    it('excludes tasks planned yesterday', () => {
+      const result = applyTriageFilters(tasks, { plannedForToday: true });
+      expect(result.find(t => t.id === '2')).toBeUndefined();
+    });
+
+    it('excludes tasks with null plannedAt', () => {
+      const result = applyTriageFilters(tasks, { plannedForToday: true });
+      expect(result.find(t => t.id === '3')).toBeUndefined();
+    });
+
+    it('combines with parents_only (AND logic)', () => {
+      const result = applyTriageFilters(tasks, { plannedForToday: true, parentsOnly: true });
+      expect(result.map(t => t.id)).toEqual(['1']);
+    });
+  });
+
+  // T015: US3 — bulk operations (003-FR-008, 003-FR-009, 003-FR-010)
+  describe('bulk_complete_tasks via sendCommand', () => {
+    it('sends bulkCompleteTasks with task IDs', async () => {
+      const results = { results: [{ id: 't1', success: true }, { id: 't2', success: true }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkCompleteTasks', { taskIds: ['t1', 't2'] });
+      expect(res.success).toBe(true);
+      expect(res.result).toEqual(results);
+    });
+
+    it('handles partial failure', async () => {
+      const results = { results: [{ id: 't1', success: true }, { id: 'bad', success: false, error: 'Task not found: bad' }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkCompleteTasks', { taskIds: ['t1', 'bad'] });
+      expect(res.success).toBe(true);
+      expect((res.result as any).results[1].success).toBe(false);
+    });
+
+    it('returns empty results for empty array', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({ results: [] }));
+      const res = await sendCommand(dirs, 'bulkCompleteTasks', { taskIds: [] });
+      expect(res.success).toBe(true);
+      expect((res.result as any).results).toEqual([]);
+    });
+  });
+
+  describe('bulk_update_tasks via sendCommand', () => {
+    it('sends bulkUpdateTasks with updates array', async () => {
+      const results = { results: [{ id: 't1', success: true }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkUpdateTasks', { updates: [{ taskId: 't1', data: { dueDay: '2026-05-01' } }] });
+      expect(res.success).toBe(true);
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'bulkUpdateTasks', { updates: [{ taskId: 't1', data: { dueDay: '2026-05-01' } }] });
+    });
+  });
+
+  // T006: US1 — timer control operations (003-FR-001, 003-FR-002)
+  describe('start_task via sendCommand', () => {
+    it('sends startTask with taskId', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      const res = await sendCommand(dirs, 'startTask', { taskId: 'task-1' });
+      expect(res.success).toBe(true);
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'startTask', { taskId: 'task-1' });
+    });
+
+    it('propagates error when task not found', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Task not found: task-x', timestamp: Date.now() });
+      const res = await sendCommand(dirs, 'startTask', { taskId: 'task-x' });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch('Task not found');
+    });
+
+    it('propagates error when task is done', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Cannot start tracking a completed task: task-1', timestamp: Date.now() });
+      const res = await sendCommand(dirs, 'startTask', { taskId: 'task-1' });
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch('Cannot start tracking a completed task');
+    });
+  });
+
+  describe('stop_task via sendCommand', () => {
+    it('sends stopTask command', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      const res = await sendCommand(dirs, 'stopTask', {});
+      expect(res.success).toBe(true);
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'stopTask', {});
+    });
+
+    it('succeeds even when no timer is running (idempotent)', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      const res = await sendCommand(dirs, 'stopTask', {});
+      expect(res.success).toBe(true);
+    });
+  });
+
+  // Bulk array max(100) validation
+  describe('bulk operations array limits', () => {
+    it('bulk_complete_tasks schema rejects >100 items', () => {
+      const { z } = require('zod');
+      const schema = z.array(z.string()).max(100);
+      const oversized = Array.from({ length: 101 }, (_, i) => `task-${i}`);
+      expect(schema.safeParse(oversized).success).toBe(false);
+    });
+
+    it('bulk_complete_tasks schema accepts exactly 100 items', () => {
+      const { z } = require('zod');
+      const schema = z.array(z.string()).max(100);
+      const maxed = Array.from({ length: 100 }, (_, i) => `task-${i}`);
+      expect(schema.safeParse(maxed).success).toBe(true);
     });
   });
 

@@ -154,9 +154,10 @@ async function executeCommand(command) {
           result = await PluginAPI.addTask({ ...d, title: cleanTitle });
         }
 
-        // Set dueDay + plannedAt for Today, or clear plannedAt for Inbox
+        // Set dueDay only — plannedAt is independent (due date ≠ planned for today).
+        // Clear both when no @date syntax so inbox tasks don't inherit stale schedules.
         if (result && dueDay) {
-          await PluginAPI.updateTask(result, { dueDay, plannedAt: Date.now() });
+          await PluginAPI.updateTask(result, { dueDay });
         } else if (result) {
           await PluginAPI.updateTask(result, { plannedAt: null, dueDay: null });
         }
@@ -173,9 +174,20 @@ async function executeCommand(command) {
         result = tasks;
         break;
       }
-      case 'updateTask':
-        result = await PluginAPI.updateTask(command.taskId, command.data || {});
+      case 'updateTask': {
+        const updateData = command.data || {};
+        // SP auto-sets plannedAt when dueDay changes. Preserve existing value unless
+        // caller explicitly included plannedAt in the update.
+        if ('dueDay' in updateData && !('plannedAt' in updateData)) {
+          const allTasksForUpdate = await PluginAPI.getTasks();
+          const taskForUpdate = allTasksForUpdate.find(t => t.id === command.taskId);
+          const currentPlannedAt = taskForUpdate ? (taskForUpdate.plannedAt ?? null) : null;
+          result = await PluginAPI.updateTask(command.taskId, { ...updateData, plannedAt: currentPlannedAt });
+        } else {
+          result = await PluginAPI.updateTask(command.taskId, updateData);
+        }
         break;
+      }
       case 'setTaskDone':
         result = await PluginAPI.updateTask(command.taskId, { isDone: true, doneOn: Date.now() });
         break;
@@ -283,6 +295,70 @@ async function executeCommand(command) {
         result = null;
         break;
       }
+      case 'bulkCompleteTasks': {
+        const allTasksForComplete = await PluginAPI.getTasks();
+        const results = [];
+        for (const id of (command.taskIds || [])) {
+          const task = allTasksForComplete.find(t => t.id === id);
+          if (!task) {
+            results.push({ id, success: false, error: `Task not found: ${id}` });
+          } else {
+            try {
+              await PluginAPI.updateTask(id, { isDone: true, doneOn: Date.now() });
+              results.push({ id, success: true });
+            } catch (e) {
+              results.push({ id, success: false, error: e.message || String(e) });
+            }
+          }
+        }
+        result = { results };
+        break;
+      }
+      case 'bulkUpdateTasks': {
+        const results = [];
+        for (const item of (command.updates || [])) {
+          try {
+            await PluginAPI.updateTask(item.taskId, item.data || {});
+            results.push({ id: item.taskId, success: true });
+          } catch (e) {
+            results.push({ id: item.taskId, success: false, error: e.message || String(e) });
+          }
+        }
+        result = { results };
+        break;
+      }
+      case 'startTask': {
+        // PluginAPI has no native timer control method, and dispatchAction has a whitelist
+        // that doesn't include task actions. Instead, we use updateTask to set currentTimestamp
+        // which is how SP internally tracks the active timer.
+        const allTasksForStart = await PluginAPI.getTasks();
+        const taskForStart = allTasksForStart.find(t => t.id === command.taskId);
+        if (!taskForStart) {
+          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+        if (taskForStart.isDone) {
+          return { success: false, error: `Cannot start tracking a completed task: ${command.taskId}`, timestamp: Date.now() };
+        }
+        // Stop any currently running task first
+        const currentlyTracked = allTasksForStart.find(t => t.currentTimestamp > 0 && t.id !== command.taskId);
+        if (currentlyTracked) {
+          await PluginAPI.updateTask(currentlyTracked.id, { currentTimestamp: null });
+        }
+        await PluginAPI.updateTask(command.taskId, { currentTimestamp: Date.now() });
+        result = null;
+        break;
+      }
+      case 'stopTask': {
+        // Find the currently tracked task and clear its currentTimestamp.
+        const allTasksForStop = await PluginAPI.getTasks();
+        const tracked = allTasksForStop.find(t => t.currentTimestamp > 0);
+        if (tracked) {
+          await PluginAPI.updateTask(tracked.id, { currentTimestamp: null });
+        }
+        // Idempotent — no error if nothing is being tracked
+        result = null;
+        break;
+      }
       case 'ping':
         result = { pong: true, pluginVersion: '1.1.1', protocolVersion: PROTOCOL_VERSION };
         break;
@@ -311,7 +387,7 @@ async function pollCommands() {
           const fp = path.join(dir, f);
           try {
             const stat = fs.statSync(fp);
-            if (stat.mtimeMs > since) {
+            if (stat.mtimeMs >= since) {
               cmds.push({ file: f, path: fp, data: JSON.parse(fs.readFileSync(fp, 'utf-8')), mtime: stat.mtimeMs });
             }
           } catch (e) {}
