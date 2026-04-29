@@ -10,20 +10,20 @@ An MCP (Model Context Protocol) server that connects AI assistants to <a href="h
 
 ## What You Can Do
 
-**☀️ Morning Triage**
-> "Show me my tasks for today and anything overdue"
+**✅ Quick Capture**
+> "Add a task: Buy milk #shopping @tomorrow 15m"
 
-The assistant retrieves your planned tasks and overdue items, presents a summary, and asks what to tackle first. Say "start the report task" and it kicks off the timer.
+Parses the tag, due date, and time estimate from short syntax — one shot, no follow-up needed.
 
-**🧹 Batch Inbox Cleanup**
-> "Tag all my unscheduled tasks in the Work project with #backlog and set them due next Friday"
+**🧹 Batch Triage**
+> "Show me all unscheduled tasks in my Work project, tag them #backlog, and set them due next Friday"
 
-Filters unscheduled tasks, bulk-updates due dates, and adds tags — all in one conversation turn.
+Filters, bulk-updates due dates, and adds tags — all in one conversation turn.
 
-**🌙 End-of-Day Wrap-up**
-> "What did I work on today? Complete anything I finished and show me a summary"
+**🧠 Full Planning Session**
+> "Look at my week: show today's plan and anything overdue. Break 'Launch blog' into subtasks, start the first one, and move anything I finished yesterday to done. Give me a time summary when you're done."
 
-Pulls your worklog, stops the running timer, marks tasks done in bulk, and gives you a time summary.
+Reads resources for context, creates subtasks in batch, starts the timer, bulk-completes tasks, pulls the worklog, and summarizes — a multi-step workflow in a single prompt.
 
 ## Installation
 
