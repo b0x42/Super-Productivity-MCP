@@ -12,6 +12,7 @@ interface TaskRecord {
   projectId: string | null;
   parentId?: string | null;
   tagIds: string[];
+  notes?: string;
   dueDay?: string | null;
   dueWithTime?: number | null;
   plannedAt?: number | null;
@@ -19,6 +20,7 @@ interface TaskRecord {
   timeEstimate: number;
   timeSpent: number;
   doneOn?: number | null;
+  repeatCfgId?: string | null;
   [key: string]: unknown;
 }
 
@@ -116,10 +118,11 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         overdue: z.boolean().optional().default(false).describe('Return only tasks with a due date strictly before today'),
         unscheduled: z.boolean().optional().default(false).describe('Return only tasks with no due date and no scheduled time'),
         planned_for_today: z.boolean().optional().default(false).describe('Return only tasks planned for today (via plannedAt timestamp)'),
+        recurring_only: z.boolean().optional().default(false).describe('Return only recurring tasks (those with a repeatCfgId)'),
         fields: z.array(z.string()).optional().describe('Return only these fields per task (e.g. ["id", "title", "dueDay"]). Omit for full objects.'),
       },
     },
-    async ({ project_id, tag_id, include_done, include_archived, search_query, parents_only, overdue, unscheduled, planned_for_today, fields }) => {
+    async ({ project_id, tag_id, include_done, include_archived, search_query, parents_only, overdue, unscheduled, planned_for_today, recurring_only, fields }) => {
       const filters: TaskFilters = {
         projectId: project_id,
         tagId: tag_id,
@@ -137,8 +140,9 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (tag_id) tasks = tasks.filter(t => t.tagIds?.includes(tag_id));
       if (search_query) {
         const q = search_query.toLowerCase();
-        tasks = tasks.filter(t => t.title?.toLowerCase().includes(q));
+        tasks = tasks.filter(t => t.title?.toLowerCase().includes(q) || (t.notes && t.notes.toLowerCase().includes(q)));
       }
+      if (recurring_only) tasks = tasks.filter(t => t.repeatCfgId != null);
 
       // Triage filters (FR-004, FR-005, FR-006)
       tasks = applyTriageFilters(tasks, { parentsOnly: parents_only, overdue, unscheduled, plannedForToday: planned_for_today });
@@ -431,6 +435,27 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       };
       const res = await sendCommand(dirs, 'createTaskWithSubtasks', { data });
       if (!res.success) return errorResult(res.error ?? 'Failed to create task with subtasks');
+      return okResult(res.result);
+    },
+  );
+
+  // plan_tasks_for_today (006-FR-004)
+  server.registerTool(
+    'plan_tasks_for_today',
+    {
+      description: 'Plan multiple tasks for today (adds to Today view) or unplan them. Uses partial-success semantics.',
+      inputSchema: {
+        task_ids: z.array(z.string()).max(100).describe('Task IDs to plan/unplan'),
+        unplan: z.boolean().optional().default(false).describe('If true, removes tasks from today instead of planning them'),
+      },
+    },
+    async ({ task_ids, unplan }) => {
+      if (!task_ids?.length) return okResult({ results: [] });
+      const now = new Date();
+      const plannedAt = unplan ? null : new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const updates = task_ids.map(id => ({ taskId: id, data: { plannedAt } }));
+      const res = await sendCommand(dirs, 'bulkUpdateTasks', { updates });
+      if (!res.success) return errorResult(res.error ?? 'Failed to plan tasks');
       return okResult(res.result);
     },
   );

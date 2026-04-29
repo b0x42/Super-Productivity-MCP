@@ -497,6 +497,61 @@ describe('task tool logic', () => {
     });
   });
 
+  // 006: Search notes
+  describe('get_tasks search_query matches notes', () => {
+    it('matches task by notes content', () => {
+      const tasks = [
+        { id: '1', title: 'Task A', notes: 'contains uuid-v4 format', isDone: false, projectId: null, tagIds: [] },
+        { id: '2', title: 'Task B', notes: 'nothing here', isDone: false, projectId: null, tagIds: [] },
+      ];
+      const q = 'uuid-v4'.toLowerCase();
+      const filtered = tasks.filter(t => t.title?.toLowerCase().includes(q) || (t.notes && t.notes.toLowerCase().includes(q)));
+      expect(filtered.map(t => t.id)).toEqual(['1']);
+    });
+
+    it('matches title OR notes', () => {
+      const tasks = [
+        { id: '1', title: 'Meeting prep', notes: '', isDone: false, projectId: null, tagIds: [] },
+        { id: '2', title: 'Other', notes: 'meeting agenda here', isDone: false, projectId: null, tagIds: [] },
+      ];
+      const q = 'meeting';
+      const filtered = tasks.filter(t => t.title?.toLowerCase().includes(q) || (t.notes && t.notes.toLowerCase().includes(q)));
+      expect(filtered.map(t => t.id)).toEqual(['1', '2']);
+    });
+  });
+
+  // 006: Recurring only filter
+  describe('get_tasks recurring_only filter', () => {
+    it('returns only tasks with repeatCfgId', () => {
+      const tasks = [
+        { id: '1', title: 'Daily standup', repeatCfgId: 'cfg-1', isDone: false, projectId: null, tagIds: [] },
+        { id: '2', title: 'One-off task', repeatCfgId: null, isDone: false, projectId: null, tagIds: [] },
+        { id: '3', title: 'No field', isDone: false, projectId: null, tagIds: [] },
+      ];
+      const filtered = tasks.filter(t => (t as any).repeatCfgId != null);
+      expect(filtered.map(t => t.id)).toEqual(['1']);
+    });
+  });
+
+  // 006: plan_tasks_for_today via sendCommand
+  describe('plan_tasks_for_today via sendCommand', () => {
+    it('sends bulkUpdateTasks with plannedAt for each task', async () => {
+      const results = { results: [{ id: 't1', success: true }, { id: 't2', success: true }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkUpdateTasks', {
+        updates: [{ taskId: 't1', data: { plannedAt: 1745884800000 } }, { taskId: 't2', data: { plannedAt: 1745884800000 } }],
+      });
+      expect(res.success).toBe(true);
+      expect((res.result as any).results).toHaveLength(2);
+    });
+
+    it('sends null plannedAt when unplanning', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({ results: [{ id: 't1', success: true }] }));
+      await sendCommand(dirs, 'bulkUpdateTasks', { updates: [{ taskId: 't1', data: { plannedAt: null } }] });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'bulkUpdateTasks', { updates: [{ taskId: 't1', data: { plannedAt: null } }] });
+    });
+  });
+
   describe('get_worklog aggregation', () => {
     it('aggregates timeSpentOnDay by date and project', () => {
       const tasks = [
