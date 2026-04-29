@@ -118,3 +118,33 @@ An AI client reads overdue tasks to proactively surface items that need attentio
 - The `sp://` URI scheme is arbitrary and local to this server — no global registration needed
 - Fresh reads (no caching) are acceptable for v1 since the IPC latency (~2s) only occurs when the client actually reads the resource
 - Resource list change notifications are out of scope for v1 (would require the plugin to push events to the server)
+
+## Deferred: Push-Based Resource Notifications (v2)
+
+**Status**: Deferred — revisit when MCP clients auto-subscribe to resources.
+
+### Concept
+
+SP plugin hooks (`projectListUpdate`, `taskUpdate`, `taskComplete`, `persistedDataUpdate`) could write a signal file to the IPC directory. The MCP server would watch for signals and emit `notifications/resources/list_changed` to connected clients, triggering re-reads of affected resources.
+
+### Hook → Resource Mapping
+
+| Hook | Invalidates |
+|------|-------------|
+| `projectListUpdate` | `sp://projects` |
+| `taskUpdate` / `taskComplete` | `sp://tasks/today`, `sp://tasks/overdue` |
+| `persistedDataUpdate` | All resources |
+| `currentTaskChange` | Future `sp://tasks/current` |
+
+### Why Deferred
+
+1. Most MCP clients don't subscribe to resources yet — notifications would go nowhere
+2. Requires a new IPC pattern (plugin → server signal channel) beyond the current request/response model
+3. Needs debouncing for rapid state changes (bulk operations)
+4. The server currently has no persistent event loop watching for signals
+
+### Prerequisites to Revisit
+
+- MCP clients (Claude Desktop, Kiro) implement resource subscriptions
+- Demand from users for real-time context freshness
+- A clean bidirectional IPC pattern (e.g., file watcher or named pipe)
