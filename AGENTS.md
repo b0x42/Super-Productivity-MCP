@@ -1,6 +1,6 @@
 # Agent Instructions
 
-> Also available as [CLAUDE.md](CLAUDE.md) for Claude Code compatibility.
+> `CLAUDE.md` is a symlink to this file for Claude Code compatibility.
 
 ## Commands
 
