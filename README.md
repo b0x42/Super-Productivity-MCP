@@ -25,6 +25,8 @@ Filters, bulk-updates due dates, and adds tags — all in one conversation turn.
 
 Reads resources for context, creates subtasks in batch, starts the timer, bulk-completes tasks, pulls the worklog, and summarizes — a multi-step workflow in a single prompt.
 
+→ [More use cases](docs/use-cases.md)
+
 ## Installation
 
 ### 1. Install the SP Plugin
@@ -79,7 +81,7 @@ Ask your AI assistant: *"Check the Super Productivity connection"*
 | `start_task` | Start the time tracker on a task |
 | `stop_task` | Stop the currently running time tracker |
 | `get_current_task` | Get the currently tracked task (null if none) |
-| `plan_tasks_for_today` | Batch plan/unplan tasks for today |
+| `plan_tasks_for_today` | Batch plan/unplan tasks for today ⚠️ [limited](#known-limitations) |
 | `bulk_complete_tasks` | Mark multiple tasks complete in one operation |
 | `bulk_update_tasks` | Update multiple tasks in one operation |
 | `add_tag_to_task` | Add a tag without replacing other tags |
@@ -117,6 +119,12 @@ Include these in task titles and they are parsed automatically:
 **Commands timing out?** Ask *"Show debug info for Super Productivity"* to check that both sides are using the same data directory. Mac App Store users may need to set `SP_MCP_DATA_DIR`.
 
 → [Full troubleshooting guide](docs/troubleshooting.md)
+
+## Known Limitations
+
+| Tool | Issue | Status |
+|------|-------|--------|
+| `plan_tasks_for_today` | Sets `plannedAt` on the task but does not add it to SP's internal Planner store, so the task may not appear in the Today view. | Upstream request: [super-productivity#7495](https://github.com/super-productivity/super-productivity/issues/7495) |
 
 ## License
 
