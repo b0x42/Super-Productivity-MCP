@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir, platform } from 'node:os';
+import { homedir, tmpdir, platform } from 'node:os';
 
 // We test resolveDataDir by setting SP_MCP_DATA_DIR
 describe('directories', () => {
@@ -44,5 +44,20 @@ describe('directories', () => {
     const { getCandidatePaths } = await import('../../src/ipc/directories.js');
     const paths = getCandidatePaths();
     expect(paths[paths.length - 1]).toBe('/tmp/super-productivity-mcp');
+  });
+
+  it('linux candidates prefer Flatpak app data before /tmp fallback', async () => {
+    if (platform() !== 'linux') return;
+    const { getCandidatePaths } = await import('../../src/ipc/directories.js');
+    const paths = getCandidatePaths();
+    expect(paths[0]).toBe(join(
+      homedir(),
+      '.var',
+      'app',
+      'com.super_productivity.SuperProductivity',
+      'data',
+      'super-productivity-mcp',
+    ));
+    expect(paths.indexOf('/tmp/super-productivity-mcp')).toBeGreaterThan(0);
   });
 });

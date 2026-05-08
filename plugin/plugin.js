@@ -7,6 +7,18 @@ let pollTimer = null;
 let lastProcessed = 0;
 let currentTrackedTask = null;
 
+function unwrapNodeResult(result) {
+  return result && result.success && result.result && typeof result.result === 'object' ? result.result : result;
+}
+
+function assertNodeResult(result, context) {
+  const r = unwrapNodeResult(result);
+  if (!r || !r.success) {
+    throw new Error(context + ': ' + ((r && r.error) || 'Node script failed'));
+  }
+  return r;
+}
+
 async function setupDirectories() {
   const result = await PluginAPI.executeNodeScript({
     script: `
@@ -15,6 +27,8 @@ async function setupDirectories() {
       const os = require('os');
       const home = os.homedir();
       const APP = 'super-productivity-mcp';
+      const TMP_ROOT = '/tmp';
+      const TMP_DATA_DIR = path.join(TMP_ROOT, APP);
       let candidates;
       if (os.platform() === 'darwin') {
         candidates = [
@@ -27,37 +41,53 @@ async function setupDirectories() {
       } else {
         const xdgData = (typeof process !== 'undefined' && process.env && process.env.XDG_DATA_HOME) || path.join(home, '.local', 'share');
         candidates = [
-          path.join(home, 'snap', 'superproductivity', 'current', '.local', 'share', APP),
+          path.join(home, '.var', 'app', 'com.super_productivity.SuperProductivity', 'data', APP),
+          path.join(home, '.var', 'app', 'com.super_productivity.SuperProductivity', 'config', APP),
           path.join(xdgData, APP),
+          path.join(home, 'snap', 'superproductivity', 'common', '.local', 'share', APP),
+          path.join(home, 'snap', 'superproductivity', 'current', '.local', 'share', APP),
           path.join('/tmp', APP) // last-resort: world-writable dir, but mode 0o700 restricts access
         ];
       }
       const errors = [];
+      const configCandidates = candidates.filter(function(p) { return p !== TMP_DATA_DIR; });
+      function isTmpDataDir(dir) {
+        return dir === TMP_ROOT || dir.indexOf(TMP_ROOT + '/') === 0;
+      }
+      function ensureWritableDir(dir) {
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+        const testFile = path.join(dir, '.write-test-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+        fs.writeFileSync(testFile, 'ok', { mode: 0o600 });
+        fs.unlinkSync(testFile);
+      }
+      function ensureIpcDirs(baseDir) {
+        const cd = path.join(baseDir, 'plugin_commands');
+        const rd = path.join(baseDir, 'plugin_responses');
+        ensureWritableDir(baseDir);
+        ensureWritableDir(cd);
+        ensureWritableDir(rd);
+        return { commandDir: cd, responseDir: rd };
+      }
       // Check for mcp_config.json override
-      for (const p of candidates) {
+      for (const p of configCandidates) {
         try {
           const cfg = path.join(p, 'mcp_config.json');
           if (fs.existsSync(cfg)) {
             const c = JSON.parse(fs.readFileSync(cfg, 'utf-8'));
-            if (c.dataDir && fs.existsSync(c.dataDir)) {
-              const cd = path.join(c.dataDir, 'plugin_commands');
-              const rd = path.join(c.dataDir, 'plugin_responses');
-              if (!fs.existsSync(cd)) fs.mkdirSync(cd, { recursive: true, mode: 0o700 });
-              if (!fs.existsSync(rd)) fs.mkdirSync(rd, { recursive: true, mode: 0o700 });
-              return { success: true, commandDir: cd, responseDir: rd };
+            if (c.dataDir && fs.existsSync(c.dataDir) && !isTmpDataDir(c.dataDir)) {
+              const dirs = ensureIpcDirs(c.dataDir);
+              return { success: true, commandDir: dirs.commandDir, responseDir: dirs.responseDir };
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          errors.push(p + ' config: ' + (e.message || e));
+        }
       }
       // Probe candidates
       for (const p of candidates) {
         try {
-          if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true, mode: 0o700 });
-          const cd = path.join(p, 'plugin_commands');
-          const rd = path.join(p, 'plugin_responses');
-          if (!fs.existsSync(cd)) fs.mkdirSync(cd, { recursive: true, mode: 0o700 });
-          if (!fs.existsSync(rd)) fs.mkdirSync(rd, { recursive: true, mode: 0o700 });
-          return { success: true, commandDir: cd, responseDir: rd };
+          const dirs = ensureIpcDirs(p);
+          return { success: true, commandDir: dirs.commandDir, responseDir: dirs.responseDir };
         } catch (e) {
           errors.push(p + ': ' + (e.message || e));
         }
@@ -68,8 +98,7 @@ async function setupDirectories() {
     timeout: 10000,
   });
   // executeNodeScript wraps result: could be result.result.success or result.success
-  let r = result;
-  if (r && r.success && r.result && typeof r.result === 'object') r = r.result;
+  const r = unwrapNodeResult(result);
   if (r && r.success) {
     commandDir = r.commandDir;
     responseDir = r.responseDir;
@@ -80,24 +109,51 @@ async function setupDirectories() {
 
 async function writeResponse(commandId, response) {
   const payload = JSON.stringify(response, null, 2);
-  await PluginAPI.executeNodeScript({
-    script: `
-      const fs = require('fs');
-      const path = require('path');
-      fs.writeFileSync(path.join(args[0], args[1] + '_response.json'), args[2], { mode: 0o600 });
-      return { success: true };
-    `,
-    args: [responseDir, commandId, payload],
-    timeout: 5000,
-  });
+  const chunkSize = 16 * 1024;
+  const runWriteStep = async (op, chunk) => {
+    const result = await PluginAPI.executeNodeScript({
+      script: `
+        const fs = require('fs');
+        const path = require('path');
+        const filePath = path.join(args[0], args[1] + '_response.json');
+        const tmpPath = filePath + '.tmp';
+        const op = args[2];
+        if (op === 'start') {
+          fs.writeFileSync(tmpPath, '', { mode: 0o600 });
+        } else if (op === 'append') {
+          fs.appendFileSync(tmpPath, args[3], 'utf-8');
+        } else if (op === 'finish') {
+          try { fs.unlinkSync(filePath); } catch (e) {}
+          fs.renameSync(tmpPath, filePath);
+        } else {
+          return { success: false, error: 'Unknown response write operation: ' + op };
+        }
+        return { success: true };
+      `,
+      args: [responseDir, commandId, op, chunk || ''],
+      timeout: 5000,
+    });
+    assertNodeResult(result, 'writeResponse ' + op);
+  };
+
+  await runWriteStep('start');
+  for (let i = 0; i < payload.length; i += chunkSize) {
+    await runWriteStep('append', payload.slice(i, i + chunkSize));
+  }
+  await runWriteStep('finish');
 }
 
 async function deleteFile(filePath) {
-  await PluginAPI.executeNodeScript({
-    script: `require('fs').unlinkSync(args[0]); return { success: true };`,
+  const result = await PluginAPI.executeNodeScript({
+    script: `
+      const fs = require('fs');
+      fs.unlinkSync(args[0]);
+      return { success: true };
+    `,
     args: [filePath],
     timeout: 5000,
   });
+  assertNodeResult(result, 'deleteFile');
 }
 
 async function executeCommand(command) {
@@ -435,7 +491,7 @@ async function pollCommands() {
       args: [commandDir, lastProcessed],
       timeout: 10000,
     });
-    const r = result && result.success && result.result && typeof result.result === 'object' ? result.result : result;
+    const r = unwrapNodeResult(result);
     if (!r || !r.success || !r.commands) return;
     for (const cmd of r.commands) {
       try {
@@ -483,7 +539,7 @@ async function init() {
         timeout: 5000,
       });
       pollTimer = setInterval(pollCommands, POLL_INTERVAL_MS);
-      console.log('MCP Bridge Plugin initialized');
+      console.log('MCP Bridge Plugin initialized', { commandDir, responseDir });
       return;
     } catch (e) {
       console.error('MCP Bridge init attempt ' + attempt + '/' + MAX_RETRIES + ' failed:', e);

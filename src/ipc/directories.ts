@@ -1,9 +1,10 @@
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
 import type { McpConfig } from './types.js';
 
 const APP_NAME = 'super-productivity-mcp';
+const TMP_ROOT = '/tmp';
 
 export function getCandidatePaths(): string[] {
   const home = homedir();
@@ -17,8 +18,11 @@ export function getCandidatePaths(): string[] {
       return [join(process.env.APPDATA ?? join(home, 'AppData', 'Roaming'), APP_NAME)];
     default: // linux
       return [
-        join(home, 'snap', 'superproductivity', 'current', '.local', 'share', APP_NAME),
+        join(home, '.var', 'app', 'com.super_productivity.SuperProductivity', 'data', APP_NAME),
+        join(home, '.var', 'app', 'com.super_productivity.SuperProductivity', 'config', APP_NAME),
         join(process.env.XDG_DATA_HOME ?? join(home, '.local', 'share'), APP_NAME),
+        join(home, 'snap', 'superproductivity', 'common', '.local', 'share', APP_NAME),
+        join(home, 'snap', 'superproductivity', 'current', '.local', 'share', APP_NAME),
         join('/tmp', APP_NAME), // last-resort: world-writable dir, but mode 0o700 restricts access
       ];
   }
@@ -30,15 +34,32 @@ function ensureDir(dir: string): void {
   }
 }
 
+function ensureWritableDir(dir: string): void {
+  ensureDir(dir);
+  const testPath = join(dir, `.write-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  writeFileSync(testPath, 'ok', { mode: 0o600 });
+  unlinkSync(testPath);
+}
+
+function ensureIpcDirs(base: string): void {
+  ensureWritableDir(base);
+  ensureWritableDir(join(base, 'plugin_commands'));
+  ensureWritableDir(join(base, 'plugin_responses'));
+}
+
+function isTmpDataDir(dir: string): boolean {
+  return dir === TMP_ROOT || dir.startsWith(`${TMP_ROOT}/`);
+}
+
 export function resolveDataDir(): string {
   const envOverride = process.env.SP_MCP_DATA_DIR;
   if (envOverride) {
-    ensureDir(envOverride);
+    ensureIpcDirs(envOverride);
     // Write mcp_config.json to standard location so plugin can find it
     const standardPaths = getCandidatePaths();
     for (const p of standardPaths) {
       try {
-        ensureDir(p);
+        ensureWritableDir(p);
         const configPath = join(p, 'mcp_config.json');
         const config: McpConfig = { dataDir: envOverride };
         writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
@@ -54,7 +75,10 @@ export function resolveDataDir(): string {
     if (existsSync(configPath)) {
       try {
         const config: McpConfig = JSON.parse(readFileSync(configPath, 'utf-8'));
-        if (config.dataDir && existsSync(config.dataDir)) return config.dataDir;
+        if (config.dataDir && existsSync(config.dataDir) && !isTmpDataDir(config.dataDir)) {
+          ensureIpcDirs(config.dataDir);
+          return config.dataDir;
+        }
       } catch { /* ignore invalid config */ }
     }
   }
@@ -62,7 +86,7 @@ export function resolveDataDir(): string {
   // Probe for first writable path
   for (const p of getCandidatePaths()) {
     try {
-      ensureDir(p);
+      ensureIpcDirs(p);
       return p;
     } catch { /* try next */ }
   }
@@ -80,7 +104,7 @@ export function resolveDirectories(): ResolvedDirs {
   const base = resolveDataDir();
   const commands = join(base, 'plugin_commands');
   const responses = join(base, 'plugin_responses');
-  ensureDir(commands);
-  ensureDir(responses);
+  ensureWritableDir(commands);
+  ensureWritableDir(responses);
   return { base, commands, responses };
 }
