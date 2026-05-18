@@ -453,7 +453,7 @@ async function executeCommand(command) {
         break;
       }
       case 'ping':
-        result = { pong: true, pluginVersion: '1.2.1', protocolVersion: PROTOCOL_VERSION };
+        result = { pong: true, pluginVersion: '1.3.0', protocolVersion: PROTOCOL_VERSION };
         break;
       default:
         return { success: false, error: `Unknown command action: ${command.action}`, timestamp: Date.now() };
@@ -516,48 +516,32 @@ async function pollCommands() {
   }
 }
 
-// Initialize with retry — nodeExecution permission may not be ready on first plugin activation
-const MAX_RETRIES = 10;
-const INITIAL_DELAY_MS = 1000;
-
 async function init() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-  let delay = INITIAL_DELAY_MS;
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      await setupDirectories();
-      // FR-020: Clean stale files on startup (>5min old)
-      await PluginAPI.executeNodeScript({
-        script: `
-          const fs = require('fs');
-          const path = require('path');
-          const now = Date.now();
-          for (const dir of [args[0], args[1]]) {
-            try {
-              for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json'))) {
-                const fp = path.join(dir, f);
-                if (now - fs.statSync(fp).mtimeMs > 300000) fs.unlinkSync(fp);
-              }
-            } catch (e) {}
+  await setupDirectories();
+  // FR-020: Clean stale files on startup (>5min old)
+  await PluginAPI.executeNodeScript({
+    script: `
+      const fs = require('fs');
+      const path = require('path');
+      const now = Date.now();
+      for (const dir of [args[0], args[1]]) {
+        try {
+          for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json'))) {
+            const fp = path.join(dir, f);
+            if (now - fs.statSync(fp).mtimeMs > 300000) fs.unlinkSync(fp);
           }
-          return { success: true };
-        `,
-        args: [commandDir, responseDir],
-        timeout: 5000,
-      });
-      pollTimer = setInterval(pollCommands, POLL_INTERVAL_MS);
-      console.log('MCP Bridge Plugin initialized', { commandDir, responseDir });
-      return;
-    } catch (e) {
-      console.error('MCP Bridge init attempt ' + attempt + '/' + MAX_RETRIES + ' failed:', e);
-      if (attempt < MAX_RETRIES) {
-        await new Promise(function(r) { setTimeout(r, delay); });
-        delay = Math.min(delay * 2, 10000);
+        } catch (e) {}
       }
-    }
-  }
-  console.error('MCP Bridge init failed after all retries');
+      return { success: true };
+    `,
+    args: [commandDir, responseDir],
+    timeout: 5000,
+  });
+  pollTimer = setInterval(pollCommands, POLL_INTERVAL_MS);
+  console.log('MCP Bridge Plugin initialized', { commandDir, responseDir });
 }
 
-// Delay first attempt to let SP finish granting permissions
-setTimeout(init, 500);
+// onReady fires after SP confirms the Node.js IPC bridge is available (with retry).
+// This replaces the old setTimeout(init, 500) workaround for cold-boot races.
+PluginAPI.onReady(init);
