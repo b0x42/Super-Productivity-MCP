@@ -543,5 +543,9 @@ async function init() {
 }
 
 // onReady fires after SP confirms the Node.js IPC bridge is available (with retry).
-// This replaces the old setTimeout(init, 500) workaround for cold-boot races.
-PluginAPI.onReady(init);
+// Fall back to setTimeout for SP < 18.6.0 which lacks onReady.
+if (typeof PluginAPI.onReady === 'function') {
+  PluginAPI.onReady(init);
+} else {
+  setTimeout(init, 500);
+}
