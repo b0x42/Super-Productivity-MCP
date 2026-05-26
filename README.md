@@ -62,6 +62,55 @@ Config file locations:
 
 Ask your AI assistant: *"Check the Super Productivity connection"*
 
+## Running without npx
+
+`npx` is convenient but fetches the package on every cold cache and needs network access. If you'd rather pin a local copy, pick one of the options below.
+
+### Option A — Global install
+
+```bash
+npm install -g super-productivity-mcp
+super-productivity-mcp --extract-plugin   # optional: write plugin.zip to cwd
+```
+
+Then point your MCP client at the installed binary:
+
+```json
+{
+  "mcpServers": {
+    "super-productivity": {
+      "command": "super-productivity-mcp"
+    }
+  }
+}
+```
+
+If the binary isn't found, your MCP client may not inherit your shell's `PATH`. Use the absolute path from `which super-productivity-mcp` (or `npm bin -g` to locate the npm global bin directory) as `command`.
+
+### Option B — From source
+
+```bash
+git clone https://github.com/b0x42/Super-Productivity-MCP.git
+cd Super-Productivity-MCP
+npm install
+npm run build              # produces dist/index.js and dist/plugin.zip
+```
+
+Then run the server directly with `node`:
+
+```json
+{
+  "mcpServers": {
+    "super-productivity": {
+      "command": "node",
+      "args": ["/absolute/path/to/Super-Productivity-MCP/dist/index.js"]
+    }
+  }
+}
+```
+
+The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm run build`.
+
 ## Prerequisites
 
 - [Super Productivity](https://super-productivity.com) >= 14.0.0
