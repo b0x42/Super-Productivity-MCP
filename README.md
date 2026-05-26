@@ -58,6 +58,15 @@ Config file locations:
 - **Claude Desktop (macOS):** `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Claude Desktop (Windows):** `%APPDATA%\Claude\claude_desktop_config.json`
 
+For **Claude Code**, don't edit the config file by hand — use the CLI:
+
+```bash
+# user scope (everywhere), project scope (-s project), or local scope (default)
+claude mcp add -s user super-productivity npx -- -y super-productivity-mcp
+```
+
+To verify, run `claude mcp list`. Restart the session to load the server. Swap `npx -- -y super-productivity-mcp` for `super-productivity-mcp` (global install) or `node /absolute/path/to/dist/index.js` (from source) — see [Running without npx](#running-without-npx).
+
 ### 3. Verify
 
 Ask your AI assistant: *"Check the Super Productivity connection"*
