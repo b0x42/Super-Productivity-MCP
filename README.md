@@ -94,7 +94,7 @@ Then point your MCP client at the installed binary:
 }
 ```
 
-If the binary isn't found, your MCP client may not inherit your shell's `PATH`. Use the absolute path from `which super-productivity-mcp` (or `npm bin -g` to locate the npm global bin directory) as `command`.
+If the binary isn't found, your MCP client may not inherit your shell's `PATH`. Use the absolute path from `which super-productivity-mcp` as `command` — or, if `which` doesn't resolve it, point at `$(npm config get prefix)/bin/super-productivity-mcp` (on macOS/Linux).
 
 ### Option B — From source
 
