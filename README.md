@@ -152,6 +152,7 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | `get_tags` | List all tags |
 | `create_tag` | Create a new tag |
 | `update_tag` | Update tag properties |
+| `get_task_repeat_cfgs` | List all recurring task configurations (schedule, cadence, day-of-week settings) |
 | `get_worklog` | Time tracking summary for a date range |
 | `show_notification` | Show a snackbar in SP's UI |
 | `check_connection` | Verify SP is running and the plugin is responding |
