@@ -526,4 +526,17 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       });
     },
   );
+
+  server.registerTool(
+    'get_task_repeat_cfgs',
+    {
+      description: 'Get all recurring task configurations (taskRepeatCfg) from Super Productivity. Returns repeat schedules with their cycle, frequency, day settings, and associated task metadata.',
+      inputSchema: {},
+    },
+    async () => {
+      const res = await sendCommand(dirs, 'getTaskRepeatCfgs');
+      if (!res.success) return errorResult(res.error ?? 'Failed to get repeat configs');
+      return okResult({ repeatCfgs: res.result });
+    },
+  );
 }

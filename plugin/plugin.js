@@ -452,6 +452,14 @@ async function executeCommand(command) {
         result = { parentId, subtaskIds };
         break;
       }
+      case 'getTaskRepeatCfgs': {
+        const state = await PluginAPI.getAppState();
+        // SP stores taskRepeatCfgs as { [id]: cfg } — convert to array so MCP consumers
+        // don't need to know the internal map shape (consistent with get_projects / get_tags).
+        const cfgMap = (state && state.taskRepeatCfgs) || {};
+        result = Object.values(cfgMap);
+        break;
+      }
       case 'ping':
         result = { pong: true, pluginVersion: '1.3.0', protocolVersion: PROTOCOL_VERSION };
         break;

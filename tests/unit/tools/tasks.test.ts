@@ -604,4 +604,39 @@ describe('task tool logic', () => {
       expect(totalActual / totalEstimate).toBeCloseTo(4000000 / 3600000);
     });
   });
+
+  describe('get_task_repeat_cfgs via sendCommand', () => {
+    it('returns repeat configs array on success', async () => {
+      const cfgs = [
+        { id: 'cfg-1', title: 'Weekly review', repeatCycle: 'WEEKLY', repeatEvery: 1, isPaused: false, tagIds: [], projectId: null },
+        { id: 'cfg-2', title: 'Daily standup', repeatCycle: 'DAILY', repeatEvery: 1, isPaused: false, tagIds: [], projectId: null },
+      ];
+      mockSend.mockResolvedValueOnce(mockResponse(cfgs));
+      const res = await sendCommand(dirs, 'getTaskRepeatCfgs');
+      expect(res.success).toBe(true);
+      expect(res.result).toEqual(cfgs);
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'getTaskRepeatCfgs');
+    });
+
+    it('returns empty array when no repeat configs exist', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse([]));
+      const res = await sendCommand(dirs, 'getTaskRepeatCfgs');
+      expect(res.success).toBe(true);
+      expect(res.result).toEqual([]);
+    });
+
+    it('includes paused configs with isPaused: true', async () => {
+      const cfgs = [{ id: 'cfg-3', title: 'Paused task', repeatCycle: 'MONTHLY', repeatEvery: 1, isPaused: true, tagIds: [], projectId: null }];
+      mockSend.mockResolvedValueOnce(mockResponse(cfgs));
+      const res = await sendCommand(dirs, 'getTaskRepeatCfgs');
+      expect((res.result as typeof cfgs)[0].isPaused).toBe(true);
+    });
+
+    it('propagates error when SP state unavailable', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Failed to get repeat configs', timestamp: Date.now() });
+      const res = await sendCommand(dirs, 'getTaskRepeatCfgs');
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('Failed to get repeat configs');
+    });
+  });
 });
