@@ -233,7 +233,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (!tag_id?.trim()) return errorResult('tag_id is required');
       const res = await sendCommand(dirs, 'addTagToTask', { taskId: task_id, tagId: tag_id });
       if (!res.success) return errorResult(res.error ?? 'Failed to add tag');
-      return okResult(null);
+      return okResult({ success: true });
     },
   );
 
@@ -252,7 +252,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (!tag_id?.trim()) return errorResult('tag_id is required');
       const res = await sendCommand(dirs, 'removeTagFromTask', { taskId: task_id, tagId: tag_id });
       if (!res.success) return errorResult(res.error ?? 'Failed to remove tag');
-      return okResult(null);
+      return okResult({ success: true });
     },
   );
 
@@ -283,7 +283,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (!task_id?.trim()) return errorResult('task_id is required');
       const res = await sendCommand(dirs, 'startTask', { taskId: task_id });
       if (!res.success) return errorResult(res.error ?? 'Failed to start task');
-      return okResult(null);
+      return okResult({ success: true });
     },
   );
 
@@ -297,7 +297,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     async () => {
       const res = await sendCommand(dirs, 'stopTask', {});
       if (!res.success) return errorResult(res.error ?? 'Failed to stop task');
-      return okResult(null);
+      return okResult({ success: true });
     },
   );
 
@@ -367,7 +367,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (!project_id?.trim()) return errorResult('project_id is required');
       const res = await sendCommand(dirs, 'moveTaskToProject', { taskId: task_id, projectId: project_id });
       if (!res.success) return errorResult(res.error ?? 'Failed to move task');
-      return okResult(null);
+      return okResult({ success: true });
     },
   );
 
@@ -387,7 +387,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (!context_id?.trim()) return errorResult('context_id is required');
       const res = await sendCommand(dirs, 'reorderTasks', { taskIds: task_ids, contextId: context_id, contextType: context_type });
       if (!res.success) return errorResult(res.error ?? 'Failed to reorder tasks');
-      return okResult(null);
+      return okResult({ success: true });
     },
   );
 
@@ -404,7 +404,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (!task_id?.trim()) return errorResult('task_id is required');
       const res = await sendCommand(dirs, 'deleteTask', { taskId: task_id });
       if (!res.success) return errorResult(res.error ?? 'Failed to delete task');
-      return okResult(null);
+      return okResult({ success: true });
     },
   );
 
