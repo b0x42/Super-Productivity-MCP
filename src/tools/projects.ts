@@ -29,7 +29,7 @@ export function registerProjectTools(server: McpServer, dirs: ResolvedDirs): voi
   }, async () => {
     const res = await sendCommand(dirs, 'getAllProjects');
     if (!res.success) return errorResult(res.error ?? 'Failed to get projects');
-    return okResult(res.result);
+    return okResult(res.result ?? []);
   });
 
   server.registerTool('update_project', {
@@ -46,6 +46,6 @@ export function registerProjectTools(server: McpServer, dirs: ResolvedDirs): voi
     if (color !== undefined) data.theme = { primary: color };
     const res = await sendCommand(dirs, 'updateProject', { projectId: project_id, data });
     if (!res.success) return errorResult(res.error ?? 'Failed to update project');
-    return okResult(res.result);
+    return okResult(res.result ?? { updated: true, project_id });
   });
 }

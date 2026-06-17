@@ -27,7 +27,7 @@ export function registerTagTools(server: McpServer, dirs: ResolvedDirs): void {
   }, async () => {
     const res = await sendCommand(dirs, 'getAllTags');
     if (!res.success) return errorResult(res.error ?? 'Failed to get tags');
-    return okResult(res.result);
+    return okResult(res.result ?? []);
   });
 
   server.registerTool('update_tag', {
@@ -46,6 +46,6 @@ export function registerTagTools(server: McpServer, dirs: ResolvedDirs): void {
     if (icon !== undefined) data.icon = icon;
     const res = await sendCommand(dirs, 'updateTag', { tagId: tag_id, data });
     if (!res.success) return errorResult(res.error ?? 'Failed to update tag');
-    return okResult(res.result);
+    return okResult(res.result ?? { updated: true, tag_id });
   });
 }
