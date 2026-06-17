@@ -260,13 +260,13 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
   server.registerTool(
     'get_current_task',
     {
-      description: 'Get the currently time-tracked task in Super Productivity. Returns null when no task has an active timer.',
+      description: 'Get the currently time-tracked task in Super Productivity. Returns { task: null } when no task has an active timer.',
       inputSchema: {},
     },
     async () => {
       const res = await sendCommand(dirs, 'loadCurrentTask', {});
       if (!res.success) return errorResult(res.error ?? 'Failed to get current task');
-      return okResult(res.result ?? null);
+      return okResult({ task: res.result ?? null });
     },
   );
 
