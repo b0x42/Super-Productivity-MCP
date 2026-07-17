@@ -19,6 +19,49 @@ function assertNodeResult(result, context) {
   return r;
 }
 
+// Parse @date short syntax (e.g. "@today 6pm", "@monday", "@3days") out of a task title
+// since PluginAPI.addTask doesn't process it. Returns the computed dueDay (or null) and the
+// title with the @syntax stripped. The trailing time token (HH, HH:MM, with optional am/pm) is
+// only consumed when not immediately followed by a letter/digit, so duration syntax like
+// "6h/11h" or "14h" isn't mistaken for a bare hour and partially eaten.
+function parseAtDateSyntax(title, now = new Date()) {
+  const dateMatch = title.match(/@(\S+)(?:\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)(?![a-zA-Z0-9]))?/i);
+  let dueDay = null;
+  const localDateStr = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  if (dateMatch) {
+    const keyword = dateMatch[1].toLowerCase();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (keyword === 'today' || keyword === '0days') {
+      dueDay = localDateStr(today);
+    } else if (keyword === 'tomorrow' || keyword === '1days') {
+      today.setDate(today.getDate() + 1);
+      dueDay = localDateStr(today);
+    } else if (/^\d+days?$/.test(keyword)) {
+      const days = parseInt(keyword);
+      today.setDate(today.getDate() + days);
+      dueDay = localDateStr(today);
+    } else {
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const idx = dayNames.indexOf(keyword);
+      if (idx !== -1) {
+        const diff = (idx - now.getDay() + 7) % 7 || 7;
+        today.setDate(today.getDate() + diff);
+        dueDay = localDateStr(today);
+      }
+    }
+  }
+
+  const cleanTitle = dueDay
+    ? title.replace(/@\S+(\s+\d{1,2}(:\d{2})?\s*(am|pm)?(?![a-zA-Z0-9]))?/i, ' ').replace(/\s+/g, ' ').trim()
+    : title;
+
+  return { dueDay, cleanTitle };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { parseAtDateSyntax };
+}
+
 async function setupDirectories() {
   const result = await PluginAPI.executeNodeScript({
     script: `
@@ -176,35 +219,7 @@ async function executeCommand(command) {
 
         // Parse @date syntax since PluginAPI.addTask doesn't process short syntax.
         // Use local date formatting (not toISOString which converts to UTC and shifts the day in positive timezones).
-        const dateMatch = title.match(/@(\S+)(?:\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)(?!\S))?/i);
-        let dueDay = null;
-        const localDateStr = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-        if (dateMatch) {
-          const keyword = dateMatch[1].toLowerCase();
-          const now = new Date();
-          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          if (keyword === 'today' || keyword === '0days') {
-            dueDay = localDateStr(today);
-          } else if (keyword === 'tomorrow' || keyword === '1days') {
-            today.setDate(today.getDate() + 1);
-            dueDay = localDateStr(today);
-          } else if (/^\d+days?$/.test(keyword)) {
-            const days = parseInt(keyword);
-            today.setDate(today.getDate() + days);
-            dueDay = localDateStr(today);
-          } else {
-            const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-            const idx = dayNames.indexOf(keyword);
-            if (idx !== -1) {
-              const diff = (idx - now.getDay() + 7) % 7 || 7;
-              today.setDate(today.getDate() + diff);
-              dueDay = localDateStr(today);
-            }
-          }
-        }
-
-        // Strip @syntax from title for clean display
-        const cleanTitle = dueDay ? title.replace(/@\S+(\s+\d{1,2}(:\d{2})?\s*(am|pm)?(?!\S))?/i, ' ').replace(/\s+/g, ' ').trim() : title;
+        const { dueDay, cleanTitle } = parseAtDateSyntax(title);
 
         const hasParent = !!d.parentId;
         const hasSyntax = hasParent && /[#\+]/.test(title);
@@ -552,8 +567,9 @@ async function init() {
 
 // onReady fires after SP confirms the Node.js IPC bridge is available (with retry).
 // Fall back to setTimeout for SP < 18.6.0 which lacks onReady.
-if (typeof PluginAPI.onReady === 'function') {
+// Guarded so this file can be `require`d in a Node/test environment without a PluginAPI global.
+if (typeof PluginAPI !== 'undefined' && typeof PluginAPI.onReady === 'function') {
   PluginAPI.onReady(init);
-} else {
+} else if (typeof PluginAPI !== 'undefined') {
   setTimeout(init, 500);
 }
