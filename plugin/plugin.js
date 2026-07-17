@@ -176,7 +176,7 @@ async function executeCommand(command) {
 
         // Parse @date syntax since PluginAPI.addTask doesn't process short syntax.
         // Use local date formatting (not toISOString which converts to UTC and shifts the day in positive timezones).
-        const dateMatch = title.match(/@(\S+)(?:\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?))?/i);
+        const dateMatch = title.match(/@(\S+)(?:\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)(?!\S))?/i);
         let dueDay = null;
         const localDateStr = (dt) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
         if (dateMatch) {
@@ -204,7 +204,7 @@ async function executeCommand(command) {
         }
 
         // Strip @syntax from title for clean display
-        const cleanTitle = dueDay ? title.replace(/@\S+(\s+\d{1,2}(:\d{2})?\s*(am|pm)?)?/i, '').trim() : title;
+        const cleanTitle = dueDay ? title.replace(/@\S+(\s+\d{1,2}(:\d{2})?\s*(am|pm)?(?!\S))?/i, ' ').replace(/\s+/g, ' ').trim() : title;
 
         const hasParent = !!d.parentId;
         const hasSyntax = hasParent && /[#\+]/.test(title);
