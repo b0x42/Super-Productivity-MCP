@@ -28,6 +28,14 @@ ls -lt ~/Library/Containers/com.superproductivity.app/Data/Library/Application\ 
 
 Whichever has recent files is where the plugin writes. Set `SP_MCP_DATA_DIR` to that path.
 
+## Windows Store — Sandboxed Installs Block IPC
+
+If either Super Productivity or your MCP client (e.g. Claude Desktop) is installed from the **Microsoft Store**, it runs in an app sandbox. The sandbox isolates the filesystem even when directory paths reported by both sides look identical — the plugin and server end up writing to different physical locations, so commands never reach the plugin.
+
+**Symptom:** debug info shows matching paths, everything looks configured correctly, but responses never arrive.
+
+**Fix:** install both Super Productivity and your MCP client as native (non-Store) apps — download installers directly from the vendor instead of the Microsoft Store. Uninstall the Store versions first to avoid leftover sandboxed data directories.
+
 ## Setting a Custom Data Directory
 
 Override the auto-detected path via `SP_MCP_DATA_DIR` in your MCP client config:
