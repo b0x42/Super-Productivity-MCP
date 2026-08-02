@@ -11,6 +11,7 @@ interface TaskRecord {
   parentId?: string | null;
   tagIds: string[];
   dueDay?: string | null;
+  dueWithTime?: number | null;
   plannedAt?: number | null;
   timeEstimate: number;
   timeSpent: number;
@@ -24,7 +25,7 @@ function shapeTask(t: TaskRecord) {
     projectId: t.projectId,
     tagIds: t.tagIds,
     dueDay: t.dueDay ?? null,
-    plannedAt: t.plannedAt ?? null,
+    plannedAt: t.dueWithTime ?? t.plannedAt ?? null,
     timeEstimate: t.timeEstimate,
     timeSpent: t.timeSpent,
     parentId: t.parentId ?? null,

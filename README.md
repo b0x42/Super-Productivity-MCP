@@ -187,7 +187,7 @@ Include these in task titles and they are parsed automatically:
 
 | Tool | Issue | Status |
 |------|-------|--------|
-| `plan_tasks_for_today` | Sets `plannedAt` on the task but does not add it to SP's internal Planner store, so the task may not appear in the Today view. | Upstream request: [super-productivity#7495](https://github.com/super-productivity/super-productivity/issues/7495) |
+| `plan_tasks_for_today` | Sets `dueWithTime` (SP's current scheduling field — `plannedAt` is legacy and ignored by the UI) so tasks appear in Today and Schedule views. | Fixed in this release |
 
 ## License
 

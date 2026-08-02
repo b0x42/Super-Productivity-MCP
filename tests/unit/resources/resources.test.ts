@@ -86,8 +86,8 @@ describe('MCP Resources', () => {
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
       mockSend.mockResolvedValueOnce(mockResponse([
-        { id: '1', title: 'Today task', projectId: 'p1', tagIds: [], plannedAt: startOfToday + 3600000, timeEstimate: 0, timeSpent: 0 },
-        { id: '2', title: 'No plan', projectId: 'p1', tagIds: [], plannedAt: null, timeEstimate: 0, timeSpent: 0 },
+        { id: '1', title: 'Today task', projectId: 'p1', tagIds: [], dueWithTime: startOfToday + 3600000, timeEstimate: 0, timeSpent: 0 },
+        { id: '2', title: 'No plan', projectId: 'p1', tagIds: [], dueWithTime: null, timeEstimate: 0, timeSpent: 0 },
       ]));
       const result = await registeredResources['sp-tasks-today'](new URL('sp://tasks/today'));
       const data = JSON.parse(result.contents[0].text);

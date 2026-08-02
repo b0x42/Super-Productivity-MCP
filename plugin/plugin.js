@@ -232,12 +232,12 @@ async function executeCommand(command) {
           result = await PluginAPI.addTask({ ...d, title: cleanTitle });
         }
 
-        // Set dueDay only — plannedAt is independent (due date ≠ planned for today).
+        // Set dueDay only — dueWithTime is independent (due date ≠ planned for today).
         // Clear both when no @date syntax so inbox tasks don't inherit stale schedules.
         if (result && dueDay) {
           await PluginAPI.updateTask(result, { dueDay });
         } else if (result) {
-          await PluginAPI.updateTask(result, { plannedAt: null, dueDay: null });
+          await PluginAPI.updateTask(result, { dueWithTime: null, dueDay: null });
         }
         break;
       }
@@ -254,13 +254,13 @@ async function executeCommand(command) {
       }
       case 'updateTask': {
         const updateData = command.data || {};
-        // SP auto-sets plannedAt when dueDay changes. Preserve existing value unless
-        // caller explicitly included plannedAt in the update.
-        if ('dueDay' in updateData && !('plannedAt' in updateData)) {
+        // SP auto-sets dueWithTime when dueDay changes. Preserve existing value unless
+        // caller explicitly included dueWithTime in the update.
+        if ('dueDay' in updateData && !('dueWithTime' in updateData)) {
           const allTasksForUpdate = await PluginAPI.getTasks();
           const taskForUpdate = allTasksForUpdate.find(t => t.id === command.taskId);
-          const currentPlannedAt = taskForUpdate ? (taskForUpdate.plannedAt ?? null) : null;
-          result = await PluginAPI.updateTask(command.taskId, { ...updateData, plannedAt: currentPlannedAt });
+          const currentDueWithTime = taskForUpdate ? (taskForUpdate.dueWithTime ?? null) : null;
+          result = await PluginAPI.updateTask(command.taskId, { ...updateData, dueWithTime: currentDueWithTime });
         } else {
           result = await PluginAPI.updateTask(command.taskId, updateData);
         }

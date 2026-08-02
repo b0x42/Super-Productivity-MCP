@@ -48,7 +48,7 @@ export function applyTriageFilters(
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const startOfTomorrow = startOfToday + 86_400_000;
     result = result.filter(t => {
-      const p = t.plannedAt;
+      const p = t.dueWithTime ?? t.plannedAt;
       return p != null && p >= startOfToday && p < startOfTomorrow;
     });
   }
@@ -81,7 +81,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       // unless the title contains @date syntax (which SP will parse into a date itself).
       const hasDateSyntax = /@/.test(title);
       if (!hasDateSyntax) {
-        data.plannedAt = null;
+        data.dueWithTime = null;
         data.dueDay = null;
       }
 
@@ -117,7 +117,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         parents_only: z.boolean().optional().default(false).describe('Exclude subtasks — return only top-level tasks'),
         overdue: z.boolean().optional().default(false).describe('Return only tasks with a due date strictly before today'),
         unscheduled: z.boolean().optional().default(false).describe('Return only tasks with no due date and no scheduled time'),
-        planned_for_today: z.boolean().optional().default(false).describe('Return only tasks planned for today (via plannedAt timestamp)'),
+        planned_for_today: z.boolean().optional().default(false).describe('Return only tasks planned for today (via dueWithTime/plannedAt timestamp)'),
         recurring_only: z.boolean().optional().default(false).describe('Return only recurring tasks (those with a repeatCfgId)'),
         fields: z.array(z.string()).optional().describe('Return only these fields per task (e.g. ["id", "title", "dueDay"]). Omit for full objects.'),
       },
@@ -172,7 +172,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         notes: z.string().optional().describe('New notes'),
         is_done: z.boolean().optional().describe('Mark as done/undone'),
         due_day: z.string().optional().describe('Due date in ISO format (e.g. 2026-04-20), or empty string to clear'),
-        planned_at: z.number().nullable().optional().describe('Unix ms timestamp to plan task for a specific time (e.g. start of today = plan for today). Pass null to unplan. Independent from due_day.'),
+        planned_at: z.number().nullable().optional().describe('Unix ms timestamp to schedule the task for a specific time (written as dueWithTime — SP\'s current scheduling field; plannedAt is legacy). Pass null to unschedule. Independent from due_day.'),
         time_estimate: z.number().optional().describe('Time estimate in milliseconds'),
         time_spent: z.number().optional().describe('Time spent in milliseconds'),
         tag_ids: z.array(z.string()).optional().describe('Bulk-replace all tags with this list (FR-003)'),
@@ -189,7 +189,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         data.doneOn = is_done ? Date.now() : null;
       }
       if (due_day !== undefined) data.dueDay = due_day || null;
-      if (planned_at !== undefined) data.plannedAt = planned_at;
+      if (planned_at !== undefined) data.dueWithTime = planned_at;
       if (time_estimate !== undefined) data.timeEstimate = time_estimate;
       if (time_spent !== undefined) data.timeSpent = time_spent;
       // tag_ids replaces the entire tag list; use add_tag_to_task / remove_tag_from_task for incremental changes
@@ -453,7 +453,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (!task_ids?.length) return okResult({ results: [] });
       const now = new Date();
       const plannedAt = unplan ? null : new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      const updates = task_ids.map(id => ({ taskId: id, data: { plannedAt } }));
+      const updates = task_ids.map(id => ({ taskId: id, data: { dueWithTime: plannedAt } }));
       const res = await sendCommand(dirs, 'bulkUpdateTasks', { updates });
       if (!res.success) return errorResult(res.error ?? 'Failed to plan tasks');
       return okResult(res.result);

@@ -84,49 +84,49 @@ describe('task tool logic', () => {
       }));
     });
 
-    it('sends updateTask with dueDay and plannedAt together', async () => {
+    it('sends updateTask with dueDay and dueWithTime together', async () => {
       mockSend.mockResolvedValueOnce(mockResponse({}));
       await sendCommand(dirs, 'updateTask', {
         taskId: 'task-1',
-        data: { dueDay: '2026-04-20', plannedAt: 1745150400000 },
+        data: { dueDay: '2026-04-20', dueWithTime: 1745150400000 },
       });
       expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
         taskId: 'task-1',
-        data: expect.objectContaining({ dueDay: '2026-04-20', plannedAt: expect.any(Number) }),
+        data: expect.objectContaining({ dueDay: '2026-04-20', dueWithTime: expect.any(Number) }),
       }));
     });
 
-    it('clears dueDay and plannedAt together', async () => {
+    it('clears dueDay and dueWithTime together', async () => {
       mockSend.mockResolvedValueOnce(mockResponse({}));
       await sendCommand(dirs, 'updateTask', {
         taskId: 'task-1',
-        data: { dueDay: null, plannedAt: null },
+        data: { dueDay: null, dueWithTime: null },
       });
       expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
         taskId: 'task-1',
-        data: { dueDay: null, plannedAt: null },
+        data: { dueDay: null, dueWithTime: null },
       }));
     });
 
-    it('sets plannedAt independently without dueDay', async () => {
+    it('sets dueWithTime independently without dueDay', async () => {
       mockSend.mockResolvedValueOnce(mockResponse({}));
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
       await sendCommand(dirs, 'updateTask', {
         taskId: 'task-1',
-        data: { plannedAt: startOfToday.getTime() },
+        data: { dueWithTime: startOfToday.getTime() },
       });
       expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
         taskId: 'task-1',
-        data: expect.objectContaining({ plannedAt: startOfToday.getTime() }),
+        data: expect.objectContaining({ dueWithTime: startOfToday.getTime() }),
       }));
     });
 
-    it('clears plannedAt without touching dueDay', async () => {
+    it('clears dueWithTime without touching dueDay', async () => {
       mockSend.mockResolvedValueOnce(mockResponse({}));
-      await sendCommand(dirs, 'updateTask', { taskId: 'task-1', data: { plannedAt: null } });
+      await sendCommand(dirs, 'updateTask', { taskId: 'task-1', data: { dueWithTime: null } });
       expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
-        data: { plannedAt: null },
+        data: { dueWithTime: null },
       }));
     });
   });
@@ -307,15 +307,16 @@ describe('task tool logic', () => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const tasks = [
-      { id: '1', title: 'Planned today', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: startOfToday + 3600000 },
-      { id: '2', title: 'Planned yesterday', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: startOfToday - 86400000 },
+      { id: '1', title: 'Planned today', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: startOfToday + 3600000, timeEstimate: 0, timeSpent: 0, plannedAt: null },
+      { id: '2', title: 'Planned yesterday', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: startOfToday - 86400000, timeEstimate: 0, timeSpent: 0, plannedAt: null },
       { id: '3', title: 'Not planned', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: null },
-      { id: '4', title: 'Subtask planned today', isDone: false, projectId: null, tagIds: [], parentId: 'p-1', dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: startOfToday + 1000 },
+      { id: '4', title: 'Subtask planned today', isDone: false, projectId: null, tagIds: [], parentId: 'p-1', dueDay: null, dueWithTime: startOfToday + 1000, timeEstimate: 0, timeSpent: 0, plannedAt: null },
+      { id: '5', title: 'Legacy plannedAt fallback', isDone: false, projectId: 'p1', tagIds: [], parentId: null, dueDay: null, dueWithTime: null, timeEstimate: 0, timeSpent: 0, plannedAt: startOfToday + 2000 },
     ];
 
     it('returns only tasks planned for today', () => {
       const result = applyTriageFilters(tasks, { plannedForToday: true });
-      expect(result.map(t => t.id)).toEqual(['1', '4']);
+      expect(result.map(t => t.id)).toEqual(['1', '4', '5']);
     });
 
     it('excludes tasks planned yesterday', () => {
@@ -323,14 +324,19 @@ describe('task tool logic', () => {
       expect(result.find(t => t.id === '2')).toBeUndefined();
     });
 
-    it('excludes tasks with null plannedAt', () => {
+    it('excludes tasks with no scheduled time', () => {
       const result = applyTriageFilters(tasks, { plannedForToday: true });
       expect(result.find(t => t.id === '3')).toBeUndefined();
     });
 
+    it('matches tasks with legacy plannedAt as fallback', () => {
+      const result = applyTriageFilters(tasks, { plannedForToday: true });
+      expect(result.find(t => t.id === '5')).toBeDefined();
+    });
+
     it('combines with parents_only (AND logic)', () => {
       const result = applyTriageFilters(tasks, { plannedForToday: true, parentsOnly: true });
-      expect(result.map(t => t.id)).toEqual(['1']);
+      expect(result.map(t => t.id)).toEqual(['1', '5']);
     });
   });
 
@@ -535,20 +541,20 @@ describe('task tool logic', () => {
 
   // 006: plan_tasks_for_today via sendCommand
   describe('plan_tasks_for_today via sendCommand', () => {
-    it('sends bulkUpdateTasks with plannedAt for each task', async () => {
+    it('sends bulkUpdateTasks with dueWithTime for each task', async () => {
       const results = { results: [{ id: 't1', success: true }, { id: 't2', success: true }] };
       mockSend.mockResolvedValueOnce(mockResponse(results));
       const res = await sendCommand(dirs, 'bulkUpdateTasks', {
-        updates: [{ taskId: 't1', data: { plannedAt: 1745884800000 } }, { taskId: 't2', data: { plannedAt: 1745884800000 } }],
+        updates: [{ taskId: 't1', data: { dueWithTime: 1745884800000 } }, { taskId: 't2', data: { dueWithTime: 1745884800000 } }],
       });
       expect(res.success).toBe(true);
       expect((res.result as any).results).toHaveLength(2);
     });
 
-    it('sends null plannedAt when unplanning', async () => {
+    it('sends null dueWithTime when unplanning', async () => {
       mockSend.mockResolvedValueOnce(mockResponse({ results: [{ id: 't1', success: true }] }));
-      await sendCommand(dirs, 'bulkUpdateTasks', { updates: [{ taskId: 't1', data: { plannedAt: null } }] });
-      expect(mockSend).toHaveBeenCalledWith(dirs, 'bulkUpdateTasks', { updates: [{ taskId: 't1', data: { plannedAt: null } }] });
+      await sendCommand(dirs, 'bulkUpdateTasks', { updates: [{ taskId: 't1', data: { dueWithTime: null } }] });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'bulkUpdateTasks', { updates: [{ taskId: 't1', data: { dueWithTime: null } }] });
     });
   });
 
