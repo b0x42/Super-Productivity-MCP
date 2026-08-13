@@ -62,6 +62,22 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = { parseAtDateSyntax };
 }
 
+// Local YYYY-MM-DD for "today", matching how SP's own getDbDateStr keys countOnDay
+// (local calendar day, not UTC — avoids shifting a day in positive timezones).
+function todayLocalDateStr() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+// Habit (SimpleCounter) full-model PluginAPI methods shipped in a later SP release
+// than this plugin's declared minSupVersion — probe before use instead of letting
+// a "not a function" TypeError leak out of the plugin sandbox.
+function missingHabitApiError() {
+  const required = ['getAllSimpleCounters', 'getSimpleCounter', 'updateSimpleCounter', 'setSimpleCounterDate', 'deleteSimpleCounter', 'setCounter'];
+  const missing = required.filter(fn => typeof PluginAPI[fn] !== 'function');
+  return missing.length ? 'Habit management requires a newer version of Super Productivity.' : null;
+}
+
 async function setupDirectories() {
   const result = await PluginAPI.executeNodeScript({
     script: `
@@ -473,6 +489,96 @@ async function executeCommand(command) {
         // don't need to know the internal map shape (consistent with get_projects / get_tags).
         const cfgMap = (state && state.taskRepeatCfgs) || {};
         result = Object.values(cfgMap);
+        break;
+      }
+      case 'getAllHabits': {
+        const habitApiError = missingHabitApiError();
+        if (habitApiError) return { success: false, error: habitApiError, timestamp: Date.now() };
+        const allCounters = await PluginAPI.getAllSimpleCounters();
+        // Habit tools only manage streak-tracked click counters — StopWatch and
+        // RepeatedCountdownReminder are a different SP feature sharing this same store.
+        result = (allCounters || []).filter(c => c.type === 'ClickCounter');
+        break;
+      }
+      case 'addHabit': {
+        const habitApiError = missingHabitApiError();
+        if (habitApiError) return { success: false, error: habitApiError, timestamp: Date.now() };
+        const dHabit = command.data || {};
+        // No native create call. setSimpleCounterDate throws if the id doesn't exist yet
+        // (it's absolute-set, not upsert) — setCounter is the one that upserts-on-missing,
+        // creating a default ClickCounter. updateSimpleCounter immediately after applies
+        // the caller's real config before anything else can observe the placeholder state.
+        const newHabitId = 'habit_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        await PluginAPI.setCounter(newHabitId, 0);
+        const habitCfg = { title: dHabit.title, type: 'ClickCounter' };
+        if (dHabit.icon !== undefined) habitCfg.icon = dHabit.icon;
+        if (dHabit.isTrackStreaks !== undefined) habitCfg.isTrackStreaks = dHabit.isTrackStreaks;
+        if (dHabit.streakMode !== undefined) habitCfg.streakMode = dHabit.streakMode;
+        if (dHabit.streakMinValue !== undefined) habitCfg.streakMinValue = dHabit.streakMinValue;
+        if (dHabit.streakWeekDays !== undefined) habitCfg.streakWeekDays = dHabit.streakWeekDays;
+        if (dHabit.streakWeeklyFrequency !== undefined) habitCfg.streakWeeklyFrequency = dHabit.streakWeeklyFrequency;
+        await PluginAPI.updateSimpleCounter(newHabitId, habitCfg);
+        result = newHabitId;
+        break;
+      }
+      case 'updateHabit': {
+        const habitApiError = missingHabitApiError();
+        if (habitApiError) return { success: false, error: habitApiError, timestamp: Date.now() };
+        const existingForUpdate = await PluginAPI.getSimpleCounter(command.habitId);
+        if (!existingForUpdate) {
+          return { success: false, error: `Habit not found: ${command.habitId}`, timestamp: Date.now() };
+        }
+        await PluginAPI.updateSimpleCounter(command.habitId, command.data || {});
+        result = null;
+        break;
+      }
+      case 'setHabitValue': {
+        const habitApiError = missingHabitApiError();
+        if (habitApiError) return { success: false, error: habitApiError, timestamp: Date.now() };
+        const dSetValue = command.data || {};
+        // Default "today" is computed here (plugin/Electron-renderer clock), not by the
+        // MCP server — the server and SP can run on different machines/timezones, and
+        // this must agree with checkHabit's default for the same reason.
+        const setValueDate = dSetValue.date || todayLocalDateStr();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(setValueDate)) {
+          return { success: false, error: 'Invalid date format: use YYYY-MM-DD', timestamp: Date.now() };
+        }
+        const existingForSetValue = await PluginAPI.getSimpleCounter(command.habitId);
+        if (!existingForSetValue) {
+          return { success: false, error: `Habit not found: ${command.habitId}`, timestamp: Date.now() };
+        }
+        await PluginAPI.setSimpleCounterDate(command.habitId, setValueDate, dSetValue.value);
+        result = null;
+        break;
+      }
+      case 'checkHabit': {
+        const habitApiError = missingHabitApiError();
+        if (habitApiError) return { success: false, error: habitApiError, timestamp: Date.now() };
+        const dCheck = command.data || {};
+        const checkDate = dCheck.date || todayLocalDateStr();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(checkDate)) {
+          return { success: false, error: 'Invalid date format: use YYYY-MM-DD', timestamp: Date.now() };
+        }
+        const existingForCheck = await PluginAPI.getSimpleCounter(command.habitId);
+        if (!existingForCheck) {
+          return { success: false, error: `Habit not found: ${command.habitId}`, timestamp: Date.now() };
+        }
+        // Mirrors the Habit Tracker UI's own click behavior: increment the day's
+        // count, don't overwrite it — toggleSimpleCounter is unrelated (StopWatch-only).
+        const currentValue = (existingForCheck.countOnDay && existingForCheck.countOnDay[checkDate]) || 0;
+        await PluginAPI.setSimpleCounterDate(command.habitId, checkDate, currentValue + 1);
+        result = currentValue + 1;
+        break;
+      }
+      case 'deleteHabit': {
+        const habitApiError = missingHabitApiError();
+        if (habitApiError) return { success: false, error: habitApiError, timestamp: Date.now() };
+        const existingForDelete = await PluginAPI.getSimpleCounter(command.habitId);
+        if (!existingForDelete) {
+          return { success: false, error: `Habit not found: ${command.habitId}`, timestamp: Date.now() };
+        }
+        await PluginAPI.deleteSimpleCounter(command.habitId);
+        result = null;
         break;
       }
       case 'ping':

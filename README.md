@@ -155,10 +155,18 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | `create_tag` | Create a new tag |
 | `update_tag` | Update tag properties |
 | `get_task_repeat_cfgs` | List all recurring task configurations (schedule, cadence, day-of-week settings) |
+| `create_habit` | Create a habit (streak-tracked click counter) |
+| `get_habits` | List all habits, including each one's computed streak length |
+| `update_habit` | Update habit title, icon, enabled state, or streak config |
+| `check_habit` | Check off a habit for a day (increments that day's value, defaults to today) |
+| `set_habit_value` | Set a habit's exact value for a day — backfill or correct history |
+| `delete_habit` | Permanently delete a habit |
 | `get_worklog` | Time tracking summary for a date range |
 | `show_notification` | Show a snackbar in SP's UI |
 | `check_connection` | Verify SP is running and the plugin is responding |
 | `debug_directories` | Show resolved data directory paths |
+
+Habit tools (`create_habit`, `get_habits`, `update_habit`, `check_habit`, `set_habit_value`, `delete_habit`) require a Super Productivity build newer than the `14.0.0` minimum above — on older builds they return a clear "requires a newer version" error instead of failing silently.
 
 ## SP Short Syntax
 

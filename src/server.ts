@@ -5,6 +5,7 @@ import { cleanStaleFiles } from './ipc/command-sender.js';
 import { registerTaskTools } from './tools/tasks.js';
 import { registerProjectTools } from './tools/projects.js';
 import { registerTagTools } from './tools/tags.js';
+import { registerHabitTools } from './tools/habits.js';
 import { registerNotificationTools } from './tools/notifications.js';
 import { registerDiagnosticTools } from './tools/diagnostics.js';
 import { registerResources } from './resources/index.js';
@@ -21,6 +22,7 @@ export function createServer(): { server: McpServer; dirs: ResolvedDirs } {
   registerTaskTools(server, dirs);
   registerProjectTools(server, dirs);
   registerTagTools(server, dirs);
+  registerHabitTools(server, dirs);
   registerNotificationTools(server, dirs);
   registerDiagnosticTools(server, dirs);
   registerResources(server, dirs);
