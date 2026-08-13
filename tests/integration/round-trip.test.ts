@@ -124,7 +124,7 @@ describe('integration: round-trip', () => {
   it('updateHabit → plugin applies partial update → server gets null result', async () => {
     const dirs = makeDirs();
     const stop = simulatePlugin(dirs, (cmd) => {
-      if (cmd.action === 'updateHabit' && cmd.habitId === 'habit-1') return null;
+      if (cmd.action === 'updateHabit') return null;
       return null;
     });
 

@@ -15,24 +15,40 @@ interface RawHabit extends HabitStreakInput {
 }
 
 const streakModeSchema = z.enum(['specific-days', 'weekly-frequency']);
+const streakWeekDaysSchema = z.record(z.string(), z.boolean()).refine(
+  days => Object.keys(days).every(k => /^[0-6]$/.test(k)),
+  { message: 'streak_week_days keys must be "0".."6" (0=Sunday..6=Saturday)' },
+);
 
 /** Attaches SP's on-the-fly-computed streak length to each habit. Exported for testability. */
 export function attachStreaks(habits: RawHabit[]): Array<RawHabit & { streak: number }> {
   return (habits || []).map(h => ({ ...h, streak: computeHabitStreak(h) }));
 }
 
+const createHabitShape = {
+  title: z.string().describe('Habit title'),
+  icon: z.string().optional().describe('Icon'),
+  is_track_streaks: z.boolean().optional().describe('Whether to track streaks for this habit'),
+  streak_mode: streakModeSchema.optional().describe('Streak mode: specific-days or weekly-frequency'),
+  streak_min_value: z.number().int().min(0).optional().describe('Minimum daily value that counts as done for streak purposes'),
+  streak_week_days: streakWeekDaysSchema.optional().describe('Weekdays (0=Sunday..6=Saturday) this habit applies to, for specific-days streak mode'),
+  streak_weekly_frequency: z.number().int().min(0).optional().describe('Target number of completions per week, for weekly-frequency streak mode'),
+};
+/** Exported for direct validation testing — registerTool needs the raw shape, not this. */
+export const createHabitSchema = z.object(createHabitShape);
+
+const setHabitValueShape = {
+  habit_id: z.string().describe('Habit ID'),
+  value: z.number().int().min(0).describe('Value to record for the day'),
+  date: z.string().optional().describe('Date, YYYY-MM-DD (defaults to today)'),
+};
+/** Exported for direct validation testing — registerTool needs the raw shape, not this. */
+export const setHabitValueSchema = z.object(setHabitValueShape);
+
 export function registerHabitTools(server: McpServer, dirs: ResolvedDirs): void {
   server.registerTool('create_habit', {
     description: 'Create a new habit (streak-tracked click counter) in Super Productivity.',
-    inputSchema: {
-      title: z.string().describe('Habit title'),
-      icon: z.string().optional().describe('Icon'),
-      is_track_streaks: z.boolean().optional().describe('Whether to track streaks for this habit'),
-      streak_mode: streakModeSchema.optional().describe('Streak mode: specific-days or weekly-frequency'),
-      streak_min_value: z.number().optional().describe('Minimum daily value that counts as done for streak purposes'),
-      streak_week_days: z.record(z.string(), z.boolean()).optional().describe('Weekdays (0=Sunday..6=Saturday) this habit applies to, for specific-days streak mode'),
-      streak_weekly_frequency: z.number().optional().describe('Target number of completions per week, for weekly-frequency streak mode'),
-    },
+    inputSchema: createHabitShape,
   }, async ({ title, icon, is_track_streaks, streak_mode, streak_min_value, streak_week_days, streak_weekly_frequency }) => {
     if (!title?.trim()) return errorResult('Title is required');
     const data: Record<string, unknown> = { title };
@@ -65,9 +81,9 @@ export function registerHabitTools(server: McpServer, dirs: ResolvedDirs): void 
       is_enabled: z.boolean().optional().describe('Whether the habit is enabled'),
       is_track_streaks: z.boolean().optional().describe('Whether to track streaks for this habit'),
       streak_mode: streakModeSchema.optional().describe('Streak mode: specific-days or weekly-frequency'),
-      streak_min_value: z.number().optional().describe('Minimum daily value that counts as done for streak purposes'),
-      streak_week_days: z.record(z.string(), z.boolean()).optional().describe('Weekdays (0=Sunday..6=Saturday) this habit applies to, for specific-days streak mode'),
-      streak_weekly_frequency: z.number().optional().describe('Target number of completions per week, for weekly-frequency streak mode'),
+      streak_min_value: z.number().int().min(0).optional().describe('Minimum daily value that counts as done for streak purposes'),
+      streak_week_days: streakWeekDaysSchema.optional().describe('Weekdays (0=Sunday..6=Saturday) this habit applies to, for specific-days streak mode'),
+      streak_weekly_frequency: z.number().int().min(0).optional().describe('Target number of completions per week, for weekly-frequency streak mode'),
     },
   }, async ({ habit_id, title, icon, is_enabled, is_track_streaks, streak_mode, streak_min_value, streak_week_days, streak_weekly_frequency }) => {
     if (!habit_id?.trim()) return errorResult('habit_id is required');
@@ -102,16 +118,15 @@ export function registerHabitTools(server: McpServer, dirs: ResolvedDirs): void 
 
   server.registerTool('set_habit_value', {
     description: 'Set a habit\'s exact recorded value for a specific day (defaults to today), for backfilling missed entries or correcting mistakes.',
-    inputSchema: {
-      habit_id: z.string().describe('Habit ID'),
-      value: z.number().describe('Value to record for the day'),
-      date: z.string().optional().describe('Date, YYYY-MM-DD (defaults to today)'),
-    },
+    inputSchema: setHabitValueShape,
   }, async ({ habit_id, value, date }) => {
     if (!habit_id?.trim()) return errorResult('habit_id is required');
-    const today = new Date();
-    const defaultDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const res = await sendCommand(dirs, 'setHabitValue', { habitId: habit_id, data: { date: date ?? defaultDate, value } });
+    // "Today" is defaulted plugin-side (SP's own clock), not here — the MCP server
+    // and SP can run on different machines/timezones, so this must stay in sync
+    // with check_habit's default rather than each computing its own "today".
+    const data: Record<string, unknown> = { value };
+    if (date !== undefined) data.date = date;
+    const res = await sendCommand(dirs, 'setHabitValue', { habitId: habit_id, data });
     if (!res.success) return errorResult(res.error ?? 'Failed to set habit value');
     return okResult(res.result);
   });

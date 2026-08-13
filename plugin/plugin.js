@@ -492,8 +492,8 @@ async function executeCommand(command) {
         break;
       }
       case 'getAllHabits': {
-        const habitApiError1 = missingHabitApiError();
-        if (habitApiError1) return { success: false, error: habitApiError1, timestamp: Date.now() };
+        const habitApiError = missingHabitApiError();
+        if (habitApiError) return { success: false, error: habitApiError, timestamp: Date.now() };
         const allCounters = await PluginAPI.getAllSimpleCounters();
         // Habit tools only manage streak-tracked click counters — StopWatch and
         // RepeatedCountdownReminder are a different SP feature sharing this same store.
@@ -501,8 +501,8 @@ async function executeCommand(command) {
         break;
       }
       case 'addHabit': {
-        const habitApiError2 = missingHabitApiError();
-        if (habitApiError2) return { success: false, error: habitApiError2, timestamp: Date.now() };
+        const habitApiError = missingHabitApiError();
+        if (habitApiError) return { success: false, error: habitApiError, timestamp: Date.now() };
         const dHabit = command.data || {};
         // No native create call. setSimpleCounterDate throws if the id doesn't exist yet
         // (it's absolute-set, not upsert) — setCounter is the one that upserts-on-missing,
@@ -522,8 +522,8 @@ async function executeCommand(command) {
         break;
       }
       case 'updateHabit': {
-        const habitApiError3 = missingHabitApiError();
-        if (habitApiError3) return { success: false, error: habitApiError3, timestamp: Date.now() };
+        const habitApiError = missingHabitApiError();
+        if (habitApiError) return { success: false, error: habitApiError, timestamp: Date.now() };
         const existingForUpdate = await PluginAPI.getSimpleCounter(command.habitId);
         if (!existingForUpdate) {
           return { success: false, error: `Habit not found: ${command.habitId}`, timestamp: Date.now() };
@@ -533,25 +533,32 @@ async function executeCommand(command) {
         break;
       }
       case 'setHabitValue': {
-        const habitApiError4 = missingHabitApiError();
-        if (habitApiError4) return { success: false, error: habitApiError4, timestamp: Date.now() };
+        const habitApiError = missingHabitApiError();
+        if (habitApiError) return { success: false, error: habitApiError, timestamp: Date.now() };
         const dSetValue = command.data || {};
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(dSetValue.date || '')) {
+        // Default "today" is computed here (plugin/Electron-renderer clock), not by the
+        // MCP server — the server and SP can run on different machines/timezones, and
+        // this must agree with checkHabit's default for the same reason.
+        const setValueDate = dSetValue.date || todayLocalDateStr();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(setValueDate)) {
           return { success: false, error: 'Invalid date format: use YYYY-MM-DD', timestamp: Date.now() };
         }
         const existingForSetValue = await PluginAPI.getSimpleCounter(command.habitId);
         if (!existingForSetValue) {
           return { success: false, error: `Habit not found: ${command.habitId}`, timestamp: Date.now() };
         }
-        await PluginAPI.setSimpleCounterDate(command.habitId, dSetValue.date, dSetValue.value);
+        await PluginAPI.setSimpleCounterDate(command.habitId, setValueDate, dSetValue.value);
         result = null;
         break;
       }
       case 'checkHabit': {
-        const habitApiError5 = missingHabitApiError();
-        if (habitApiError5) return { success: false, error: habitApiError5, timestamp: Date.now() };
+        const habitApiError = missingHabitApiError();
+        if (habitApiError) return { success: false, error: habitApiError, timestamp: Date.now() };
         const dCheck = command.data || {};
         const checkDate = dCheck.date || todayLocalDateStr();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(checkDate)) {
+          return { success: false, error: 'Invalid date format: use YYYY-MM-DD', timestamp: Date.now() };
+        }
         const existingForCheck = await PluginAPI.getSimpleCounter(command.habitId);
         if (!existingForCheck) {
           return { success: false, error: `Habit not found: ${command.habitId}`, timestamp: Date.now() };
@@ -564,8 +571,8 @@ async function executeCommand(command) {
         break;
       }
       case 'deleteHabit': {
-        const habitApiError6 = missingHabitApiError();
-        if (habitApiError6) return { success: false, error: habitApiError6, timestamp: Date.now() };
+        const habitApiError = missingHabitApiError();
+        if (habitApiError) return { success: false, error: habitApiError, timestamp: Date.now() };
         const existingForDelete = await PluginAPI.getSimpleCounter(command.habitId);
         if (!existingForDelete) {
           return { success: false, error: `Habit not found: ${command.habitId}`, timestamp: Date.now() };

@@ -5,7 +5,7 @@ vi.mock('../../../src/ipc/command-sender.js', () => ({
 }));
 
 import { sendCommand } from '../../../src/ipc/command-sender.js';
-import { attachStreaks } from '../../../src/tools/habits.js';
+import { attachStreaks, createHabitSchema, setHabitValueSchema } from '../../../src/tools/habits.js';
 import type { ResolvedDirs } from '../../../src/ipc/directories.js';
 import type { Response } from '../../../src/ipc/types.js';
 
@@ -65,9 +65,32 @@ describe('habit tool logic', () => {
       });
     });
 
-    it('rejects a missing/blank title before sending a command', () => {
-      expect(''.trim()).toBe('');
-      expect('   '.trim()).toBe('');
+    it('rejects a missing title', () => {
+      expect(createHabitSchema.safeParse({}).success).toBe(false);
+    });
+
+    it('rejects streak_week_days keys outside 0-6', () => {
+      const result = createHabitSchema.safeParse({
+        title: 'X',
+        streak_week_days: { monday: true },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('accepts streak_week_days keys within 0-6', () => {
+      const result = createHabitSchema.safeParse({
+        title: 'X',
+        streak_week_days: { 0: true, 6: false },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects a negative streak_min_value', () => {
+      expect(createHabitSchema.safeParse({ title: 'X', streak_min_value: -1 }).success).toBe(false);
+    });
+
+    it('rejects a negative streak_weekly_frequency', () => {
+      expect(createHabitSchema.safeParse({ title: 'X', streak_weekly_frequency: -1 }).success).toBe(false);
     });
   });
 
@@ -179,9 +202,25 @@ describe('habit tool logic', () => {
       });
     });
 
-    it('rejects an invalid date format before sending', () => {
-      expect(/^\d{4}-\d{2}-\d{2}$/.test('08/13/2026')).toBe(false);
-      expect(/^\d{4}-\d{2}-\d{2}$/.test('2026-08-13')).toBe(true);
+    it('omits date from the payload when not provided, so the plugin defaults it (not the server)', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      await sendCommand(dirs, 'setHabitValue', { habitId: 'habit-1', data: { value: 1 } });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'setHabitValue', {
+        habitId: 'habit-1',
+        data: { value: 1 },
+      });
+    });
+
+    it('rejects a negative value', () => {
+      expect(setHabitValueSchema.safeParse({ habit_id: 'habit-1', value: -1 }).success).toBe(false);
+    });
+
+    it('rejects a non-integer value', () => {
+      expect(setHabitValueSchema.safeParse({ habit_id: 'habit-1', value: 1.5 }).success).toBe(false);
+    });
+
+    it('accepts a valid payload', () => {
+      expect(setHabitValueSchema.safeParse({ habit_id: 'habit-1', value: 1, date: '2026-08-13' }).success).toBe(true);
     });
   });
 

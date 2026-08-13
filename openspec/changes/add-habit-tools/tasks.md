@@ -6,9 +6,9 @@
 
 - [x] 2.1 Add a capability check helper that verifies `PluginAPI.getAllSimpleCounters`, `getSimpleCounter`, `updateSimpleCounter`, `setSimpleCounterDate`, `deleteSimpleCounter` are all functions; return the "requires a newer version of Super Productivity" error when any is missing
 - [x] 2.2 `case 'getAllHabits'`: call `PluginAPI.getAllSimpleCounters()`, filter to `type === 'ClickCounter'`, return the array
-- [x] 2.3 `case 'addHabit'`: generate an id, call `setSimpleCounterDate(id, today, 0)` to create the placeholder, then `updateSimpleCounter(id, { title, ...streak config, type: 'ClickCounter' })`; return the generated id
+- [x] 2.3 `case 'addHabit'`: generate an id, call `setCounter(id, 0)` to create the placeholder (`setSimpleCounterDate` throws for a non-existent id — only `setCounter` upserts; caught during manual smoke testing), then `updateSimpleCounter(id, { title, ...streak config, type: 'ClickCounter' })`; return the generated id
 - [x] 2.4 `case 'updateHabit'`: validate the habit exists via `getSimpleCounter(command.habitId)` (error if not found), then `updateSimpleCounter(command.habitId, command.data)`
-- [x] 2.5 `case 'setHabitValue'`: validate the habit exists, validate `command.data.date` matches `YYYY-MM-DD`, call `setSimpleCounterDate(command.habitId, command.data.date, command.data.value)`
+- [x] 2.5 `case 'setHabitValue'`: default `command.data.date` to today (plugin-side clock, matching `checkHabit`) when omitted, validate it matches `YYYY-MM-DD`, validate the habit exists, call `setSimpleCounterDate(command.habitId, date, command.data.value)`
 - [x] 2.6 `case 'checkHabit'`: validate the habit exists, read current value for `command.data.date` (default today) from `getSimpleCounter`, call `setSimpleCounterDate(command.habitId, date, currentValue + 1)`
 - [x] 2.7 `case 'deleteHabit'`: validate the habit exists (error if not found), call `PluginAPI.deleteSimpleCounter(command.habitId)`
 
