@@ -32,6 +32,8 @@ src/
     tasks.ts            # get_tasks, create_task, update_task, reorder_tasks, …
     projects.ts         # get_projects, create_project, update_project
     tags.ts             # get_tags, create_tag, update_tag
+    habits.ts           # get_habits, create_habit, update_habit, check_habit, set_habit_value, delete_habit
+    habit-streak.ts     # streak computation, ported from SP's own algorithm (pure, unit-tested)
     notifications.ts    # show_notification
     diagnostics.ts      # debug tool
     result.ts           # okResult() / errorResult() helpers

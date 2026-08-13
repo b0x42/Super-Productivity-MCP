@@ -62,6 +62,20 @@ Parses tag, due date, and time estimate from short syntax — one shot, no follo
 
 > "What's overdue? Sort by oldest first."
 
+## Habits
+
+> "Create a habit called 'Drink water' that I do every day"
+
+> "Check off 'Morning run' for today"
+
+> "Show me all my habits and their current streaks"
+
+> "I forgot to log yesterday — mark 'Meditate' as done for 2026-08-12"
+
+> "Create a habit 'Gym' tracked weekly — 3 times a week counts as a streak"
+
+> "Delete the 'Old habit I don't do anymore' habit"
+
 ## Daily Routines
 
 > "Morning standup: show what I did yesterday, what's planned today, and anything blocked (overdue > 3 days)"
