@@ -52,4 +52,4 @@
 - [x] 7.2 `npm test`
 - [x] 7.3 `npm run lint`
 - [x] 7.4 `npm run build` (confirms `dist/plugin.zip` picks up the updated `plugin.js`)
-- [ ] 7.5 Manual smoke test against a running SP instance (>= the build containing commit `3d4843ddf`): create a habit, check it off twice, list habits and confirm the value and streak, backfill a past date, update its title, delete it
+- [x] 7.5 Manual smoke test against a running SP instance (>= the build containing commit `3d4843ddf`): create a habit, check it off twice, list habits and confirm the value and streak, backfill a past date, update its title, delete it

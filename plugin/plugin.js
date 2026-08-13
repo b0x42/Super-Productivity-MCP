@@ -73,7 +73,7 @@ function todayLocalDateStr() {
 // than this plugin's declared minSupVersion — probe before use instead of letting
 // a "not a function" TypeError leak out of the plugin sandbox.
 function missingHabitApiError() {
-  const required = ['getAllSimpleCounters', 'getSimpleCounter', 'updateSimpleCounter', 'setSimpleCounterDate', 'deleteSimpleCounter'];
+  const required = ['getAllSimpleCounters', 'getSimpleCounter', 'updateSimpleCounter', 'setSimpleCounterDate', 'deleteSimpleCounter', 'setCounter'];
   const missing = required.filter(fn => typeof PluginAPI[fn] !== 'function');
   return missing.length ? 'Habit management requires a newer version of Super Productivity.' : null;
 }
@@ -504,11 +504,12 @@ async function executeCommand(command) {
         const habitApiError2 = missingHabitApiError();
         if (habitApiError2) return { success: false, error: habitApiError2, timestamp: Date.now() };
         const dHabit = command.data || {};
-        // No native create call. setSimpleCounterDate on a fresh id creates it with
-        // defaults (same upsert behavior SP's own setCounter bridge method relies on);
-        // updateSimpleCounter immediately after applies the caller's real config.
+        // No native create call. setSimpleCounterDate throws if the id doesn't exist yet
+        // (it's absolute-set, not upsert) — setCounter is the one that upserts-on-missing,
+        // creating a default ClickCounter. updateSimpleCounter immediately after applies
+        // the caller's real config before anything else can observe the placeholder state.
         const newHabitId = 'habit_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-        await PluginAPI.setSimpleCounterDate(newHabitId, todayLocalDateStr(), 0);
+        await PluginAPI.setCounter(newHabitId, 0);
         const habitCfg = { title: dHabit.title, type: 'ClickCounter' };
         if (dHabit.icon !== undefined) habitCfg.icon = dHabit.icon;
         if (dHabit.isTrackStreaks !== undefined) habitCfg.isTrackStreaks = dHabit.isTrackStreaks;
