@@ -1,3 +1,5 @@
+
+
 <p align="center">
   <img src="plugin/icon.svg" width="128" height="128" alt="SP MCP Bridge icon">
 </p>
@@ -35,6 +37,7 @@ Reads resources for context, creates subtasks in batch, starts the timer, bulk-c
 ```bash
 npx -y super-productivity-mcp@latest --extract-plugin
 ```
+This command extracts `plugin.zip` to your current directory.
 
 **Option B — manual download:**
 Download `plugin.zip` from the [latest release](https://github.com/b0x42/Super-Productivity-MCP/releases/latest).
