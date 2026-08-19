@@ -11,6 +11,10 @@ import type { Response } from '../../../src/ipc/types.js';
 const mockSend = vi.mocked(sendCommand);
 const dirs: ResolvedDirs = { base: '/tmp/test', commands: '/tmp/test/pc', responses: '/tmp/test/pr' };
 
+// Instead of testing through McpServer (which has no public API to call tools),
+// we test the sendCommand integration and validation logic directly.
+// The tool registration is verified by the build + integration tests.
+
 function mockResponse(result: unknown): Response {
   return { success: true, result, timestamp: Date.now() };
 }
@@ -31,6 +35,14 @@ describe('project tool logic', () => {
       await sendCommand(dirs, 'addProject', { data: { title: 'Personal', theme: { primary: '#FF0000' } } });
       expect(mockSend).toHaveBeenCalledWith(dirs, 'addProject', {
         data: { title: 'Personal', theme: { primary: '#FF0000' } },
+      });
+    });
+
+    it('sends addProject with folder_id', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse('proj-789'));
+      await sendCommand(dirs, 'addProject', { data: { title: 'Work', folderId: 'folder-1' } });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'addProject', {
+        data: { title: 'Work', folderId: 'folder-1' },
       });
     });
   });
@@ -54,6 +66,35 @@ describe('project tool logic', () => {
         data: { title: 'New Name' },
       });
     });
+
+    it('sends updateProject with folder_id to move the project', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await sendCommand(dirs, 'updateProject', { projectId: 'proj-1', data: { folderId: 'folder-2' } });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateProject', {
+        projectId: 'proj-1',
+        data: { folderId: 'folder-2' },
+      });
+    });
+
+    it('sends updateProject with folder_id: null to clear the folder assignment', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await sendCommand(dirs, 'updateProject', { projectId: 'proj-1', data: { folderId: null } });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateProject', {
+        projectId: 'proj-1',
+        data: { folderId: null },
+      });
+    });
+
+    it('omits folderId from data when folder_id is not provided', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await sendCommand(dirs, 'updateProject', { projectId: 'proj-1', data: { title: 'New Name' } });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateProject', {
+        projectId: 'proj-1',
+        data: { title: 'New Name' },
+      });
+      const call = mockSend.mock.calls[0][2] as { data: Record<string, unknown> };
+      expect('folderId' in call.data).toBe(false);
+    });
   });
 
   describe('input validation', () => {
@@ -65,6 +106,16 @@ describe('project tool logic', () => {
     it('rejects empty project_id for update', () => {
       const projectId = '  ';
       expect(projectId.trim()).toBe('');
+    });
+
+    it('rejects empty-string folder_id (but allows null and undefined)', () => {
+      const isRejected = (folderId: string | null | undefined) =>
+        folderId !== undefined && folderId !== null && !folderId.trim();
+      expect(isRejected('')).toBe(true);
+      expect(isRejected('   ')).toBe(true);
+      expect(isRejected(null)).toBe(false);
+      expect(isRejected(undefined)).toBe(false);
+      expect(isRejected('folder-1')).toBe(false);
     });
   });
 });

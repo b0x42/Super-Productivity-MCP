@@ -199,6 +199,7 @@ Include these in task titles and they are parsed automatically:
 | Tool | Issue | Status |
 |------|-------|--------|
 | `plan_tasks_for_today` | Sets `plannedAt` on the task but does not add it to SP's internal Planner store, so the task may not appear in the Today view. | Upstream request: [super-productivity#7495](https://github.com/super-productivity/super-productivity/issues/7495) |
+| `create_project` / `update_project` | `folder_id` can be set or cleared, but there's no way to list folders through this server — the plugin API exposes no folder getter. Get the ID from the Super Productivity UI. | Upstream request: [super-productivity#9600](https://github.com/super-productivity/super-productivity/issues/9600) |
 
 ## License
 
