@@ -11,6 +11,10 @@ import type { Response } from '../../../src/ipc/types.js';
 const mockSend = vi.mocked(sendCommand);
 const dirs: ResolvedDirs = { base: '/tmp/test', commands: '/tmp/test/pc', responses: '/tmp/test/pr' };
 
+// Instead of testing through McpServer (which has no public API to call tools),
+// we test the sendCommand integration and validation logic directly.
+// The tool registration is verified by the build + integration tests.
+
 function mockResponse(result: unknown): Response {
   return { success: true, result, timestamp: Date.now() };
 }

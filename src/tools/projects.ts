@@ -9,7 +9,7 @@ export function registerProjectTools(server: McpServer, dirs: ResolvedDirs): voi
   server.registerTool('create_project', {
     description:
       'Create a new project in Super Productivity. Note: folder_id must be obtained from the ' +
-      "Super Productivity UI — this server has no way to list folders. Pass folder_id: null (or " +
+      'Super Productivity UI — this server has no way to list folders. Pass folder_id: null (or ' +
       'omit it) to leave the project unfiled.',
     inputSchema: {
       title: z.string().describe('Project title'),
@@ -50,7 +50,7 @@ export function registerProjectTools(server: McpServer, dirs: ResolvedDirs): voi
     description:
       'Update an existing project. Note: folder_id must be obtained from the Super Productivity ' +
       'UI — this server has no way to list folders. Pass folder_id: null to clear the folder ' +
-      "assignment (move the project back to the root); omit folder_id to leave it unchanged.",
+      'assignment (move the project back to the root); omit folder_id to leave it unchanged.',
     inputSchema: {
       project_id: z.string().describe('Project ID to update'),
       title: z.string().optional().describe('New title'),
