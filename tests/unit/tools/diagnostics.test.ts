@@ -5,6 +5,7 @@ vi.mock('../../../src/ipc/command-sender.js', () => ({
 }));
 
 import { sendCommand } from '../../../src/ipc/command-sender.js';
+import { checkConnectionSchema, debugDirectoriesSchema } from '../../../src/tools/diagnostics.js';
 import type { ResolvedDirs } from '../../../src/ipc/directories.js';
 import type { Response } from '../../../src/ipc/types.js';
 
@@ -52,6 +53,32 @@ describe('diagnostic tool logic', () => {
       expect(output.commands).toBe('/tmp/test/pc');
       expect(output.responses).toBe('/tmp/test/pr');
       expect(output.exists.base).toBe(true);
+    });
+  });
+
+  describe('check_connection / debug_directories schemas — strict unknown-key rejection', () => {
+    it('rejects an unrecognized parameter on check_connection, naming it in the error', () => {
+      const result = checkConnectionSchema.safeParse({ verbose: true });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('verbose');
+      }
+    });
+
+    it('accepts a call with no parameters on check_connection', () => {
+      expect(checkConnectionSchema.safeParse({}).success).toBe(true);
+    });
+
+    it('rejects an unrecognized parameter on debug_directories, naming it in the error', () => {
+      const result = debugDirectoriesSchema.safeParse({ verbose: true });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('verbose');
+      }
+    });
+
+    it('accepts a call with no parameters on debug_directories', () => {
+      expect(debugDirectoriesSchema.safeParse({}).success).toBe(true);
     });
   });
 });

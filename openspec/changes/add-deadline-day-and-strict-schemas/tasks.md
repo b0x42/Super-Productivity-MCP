@@ -42,8 +42,8 @@ Each group below writes the failing test(s) first, then the implementation that 
 
 ## 9. Strict schemas: diagnostics.ts
 
-- [ ] 9.1 In `tests/unit/tools/diagnostics.test.ts`, add tests: unrecognized-parameter rejection (naming the parameter) and known-parameters-still-accepted.
-- [ ] 9.2 In `src/tools/diagnostics.ts`, apply `.strict()` to every registered tool's inputSchema, passing the schema instance into `registerTool`.
+- [x] 9.1 In `tests/unit/tools/diagnostics.test.ts`, add tests: unrecognized-parameter rejection (naming the parameter) and known-parameters-still-accepted.
+- [x] 9.2 In `src/tools/diagnostics.ts`, apply `.strict()` to every registered tool's inputSchema, passing the schema instance into `registerTool`.
 
 ## 10. Verification
 
