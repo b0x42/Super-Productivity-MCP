@@ -5,6 +5,7 @@ vi.mock('../../../src/ipc/command-sender.js', () => ({
 }));
 
 import { sendCommand } from '../../../src/ipc/command-sender.js';
+import { updateProjectSchema } from '../../../src/tools/projects.js';
 import type { ResolvedDirs } from '../../../src/ipc/directories.js';
 import type { Response } from '../../../src/ipc/types.js';
 
@@ -116,6 +117,21 @@ describe('project tool logic', () => {
       expect(isRejected(null)).toBe(false);
       expect(isRejected(undefined)).toBe(false);
       expect(isRejected('folder-1')).toBe(false);
+    });
+  });
+
+  describe('update_project schema — strict unknown-key rejection', () => {
+    it('rejects an unrecognized parameter, naming it in the error', () => {
+      const result = updateProjectSchema.safeParse({ project_id: 'proj-1', titel: 'Typo' });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('titel');
+      }
+    });
+
+    it('accepts a call using only documented parameters', () => {
+      const result = updateProjectSchema.safeParse({ project_id: 'proj-1', title: 'New Name' });
+      expect(result.success).toBe(true);
     });
   });
 });

@@ -22,8 +22,8 @@ Each group below writes the failing test(s) first, then the implementation that 
 
 ## 5. Strict schemas: projects.ts
 
-- [ ] 5.1 In `tests/unit/tools/projects.test.ts`, add tests: an unrecognized parameter on a representative tool is rejected naming that parameter; known-parameters-only calls still succeed.
-- [ ] 5.2 In `src/tools/projects.ts`, apply `.strict()` to every registered tool's inputSchema, passing the schema instance into `registerTool`.
+- [x] 5.1 In `tests/unit/tools/projects.test.ts`, add tests: an unrecognized parameter on a representative tool is rejected naming that parameter; known-parameters-only calls still succeed.
+- [x] 5.2 In `src/tools/projects.ts`, apply `.strict()` to every registered tool's inputSchema, passing the schema instance into `registerTool`.
 
 ## 6. Strict schemas: tags.ts
 
