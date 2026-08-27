@@ -32,8 +32,8 @@ Each group below writes the failing test(s) first, then the implementation that 
 
 ## 7. Strict schemas: habits.ts
 
-- [ ] 7.1 In `tests/unit/tools/habits.test.ts`, add tests: unrecognized-parameter rejection (naming the parameter) and known-parameters-still-accepted, for a representative tool, including one built from the exported `createHabitSchema`/`setHabitValueSchema`.
-- [ ] 7.2 In `src/tools/habits.ts`, apply `.strict()` to every registered tool's inputSchema, including the exported `createHabitSchema` and `setHabitValueSchema`. Fix the existing bug where `registerTool` was passed the bare raw shape instead of the exported schema for `create_habit`/`set_habit_value` — pass the actual schema instance so `.strict()` is enforced at runtime, not just in tests.
+- [x] 7.1 In `tests/unit/tools/habits.test.ts`, add tests: unrecognized-parameter rejection (naming the parameter) and known-parameters-still-accepted, for a representative tool, including one built from the exported `createHabitSchema`/`setHabitValueSchema`.
+- [x] 7.2 In `src/tools/habits.ts`, apply `.strict()` to every registered tool's inputSchema, including the exported `createHabitSchema` and `setHabitValueSchema`. Fix the existing bug where `registerTool` was passed the bare raw shape instead of the exported schema for `create_habit`/`set_habit_value` — pass the actual schema instance so `.strict()` is enforced at runtime, not just in tests.
 
 ## 8. Strict schemas: notifications.ts
 
