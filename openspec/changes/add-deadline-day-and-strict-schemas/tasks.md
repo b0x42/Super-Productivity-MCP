@@ -27,8 +27,8 @@ Each group below writes the failing test(s) first, then the implementation that 
 
 ## 6. Strict schemas: tags.ts
 
-- [ ] 6.1 In `tests/unit/tools/tags.test.ts`, add tests: unrecognized-parameter rejection (naming the parameter) and known-parameters-still-accepted, for a representative tool.
-- [ ] 6.2 In `src/tools/tags.ts`, apply `.strict()` to every registered tool's inputSchema, passing the schema instance into `registerTool`.
+- [x] 6.1 In `tests/unit/tools/tags.test.ts`, add tests: unrecognized-parameter rejection (naming the parameter) and known-parameters-still-accepted, for a representative tool.
+- [x] 6.2 In `src/tools/tags.ts`, apply `.strict()` to every registered tool's inputSchema, passing the schema instance into `registerTool`.
 
 ## 7. Strict schemas: habits.ts
 
