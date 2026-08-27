@@ -47,6 +47,6 @@ Each group below writes the failing test(s) first, then the implementation that 
 
 ## 10. Verification
 
-- [ ] 10.1 `npm run typecheck`
-- [ ] 10.2 `npm run lint`
-- [ ] 10.3 `npm test`
+- [x] 10.1 `npm run typecheck`
+- [x] 10.2 `npm run lint`
+- [x] 10.3 `npm test`
