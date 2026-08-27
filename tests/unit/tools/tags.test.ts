@@ -5,6 +5,7 @@ vi.mock('../../../src/ipc/command-sender.js', () => ({
 }));
 
 import { sendCommand } from '../../../src/ipc/command-sender.js';
+import { updateTagSchema } from '../../../src/tools/tags.js';
 import type { ResolvedDirs } from '../../../src/ipc/directories.js';
 import type { Response } from '../../../src/ipc/types.js';
 
@@ -64,6 +65,21 @@ describe('tag tool logic', () => {
 
     it('rejects empty tag_id for update', () => {
       expect(''.trim()).toBe('');
+    });
+  });
+
+  describe('update_tag schema — strict unknown-key rejection', () => {
+    it('rejects an unrecognized parameter, naming it in the error', () => {
+      const result = updateTagSchema.safeParse({ tag_id: 'tag-1', colour: '#F00' });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('colour');
+      }
+    });
+
+    it('accepts a call using only documented parameters', () => {
+      const result = updateTagSchema.safeParse({ tag_id: 'tag-1', title: 'critical' });
+      expect(result.success).toBe(true);
     });
   });
 });

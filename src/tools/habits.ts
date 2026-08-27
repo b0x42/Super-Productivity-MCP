@@ -25,6 +25,8 @@ export function attachStreaks(habits: RawHabit[]): Array<RawHabit & { streak: nu
   return (habits || []).map(h => ({ ...h, streak: computeHabitStreak(h) }));
 }
 
+// .strict() rejects unrecognized parameters instead of silently dropping them — see tasks.ts.
+
 const createHabitShape = {
   title: z.string().describe('Habit title'),
   icon: z.string().optional().describe('Icon'),
@@ -34,21 +36,46 @@ const createHabitShape = {
   streak_week_days: streakWeekDaysSchema.optional().describe('Weekdays (0=Sunday..6=Saturday) this habit applies to, for specific-days streak mode'),
   streak_weekly_frequency: z.number().int().min(0).optional().describe('Target number of completions per week, for weekly-frequency streak mode'),
 };
-/** Exported for direct validation testing — registerTool needs the raw shape, not this. */
-export const createHabitSchema = z.object(createHabitShape);
+export const createHabitSchema = z.object(createHabitShape).strict();
+
+const getHabitsShape = {};
+export const getHabitsSchema = z.object(getHabitsShape).strict();
+
+const updateHabitShape = {
+  habit_id: z.string().describe('Habit ID to update'),
+  title: z.string().optional().describe('New title'),
+  icon: z.string().optional().describe('New icon'),
+  is_enabled: z.boolean().optional().describe('Whether the habit is enabled'),
+  is_track_streaks: z.boolean().optional().describe('Whether to track streaks for this habit'),
+  streak_mode: streakModeSchema.optional().describe('Streak mode: specific-days or weekly-frequency'),
+  streak_min_value: z.number().int().min(0).optional().describe('Minimum daily value that counts as done for streak purposes'),
+  streak_week_days: streakWeekDaysSchema.optional().describe('Weekdays (0=Sunday..6=Saturday) this habit applies to, for specific-days streak mode'),
+  streak_weekly_frequency: z.number().int().min(0).optional().describe('Target number of completions per week, for weekly-frequency streak mode'),
+};
+export const updateHabitSchema = z.object(updateHabitShape).strict();
+
+const checkHabitShape = {
+  habit_id: z.string().describe('Habit ID to check off'),
+  date: z.string().optional().describe('Date to check off, YYYY-MM-DD (defaults to today)'),
+};
+export const checkHabitSchema = z.object(checkHabitShape).strict();
 
 const setHabitValueShape = {
   habit_id: z.string().describe('Habit ID'),
   value: z.number().int().min(0).describe('Value to record for the day'),
   date: z.string().optional().describe('Date, YYYY-MM-DD (defaults to today)'),
 };
-/** Exported for direct validation testing — registerTool needs the raw shape, not this. */
-export const setHabitValueSchema = z.object(setHabitValueShape);
+export const setHabitValueSchema = z.object(setHabitValueShape).strict();
+
+const deleteHabitShape = {
+  habit_id: z.string().describe('Habit ID to delete'),
+};
+export const deleteHabitSchema = z.object(deleteHabitShape).strict();
 
 export function registerHabitTools(server: McpServer, dirs: ResolvedDirs): void {
   server.registerTool('create_habit', {
     description: 'Create a new habit (streak-tracked click counter) in Super Productivity.',
-    inputSchema: createHabitShape,
+    inputSchema: createHabitSchema,
   }, async ({ title, icon, is_track_streaks, streak_mode, streak_min_value, streak_week_days, streak_weekly_frequency }) => {
     if (!title?.trim()) return errorResult('Title is required');
     const data: Record<string, unknown> = { title };
@@ -65,7 +92,7 @@ export function registerHabitTools(server: McpServer, dirs: ResolvedDirs): void 
 
   server.registerTool('get_habits', {
     description: 'Get all habits from Super Productivity, including each habit\'s currently computed streak length.',
-    inputSchema: {},
+    inputSchema: getHabitsSchema,
   }, async () => {
     const res = await sendCommand(dirs, 'getAllHabits');
     if (!res.success) return errorResult(res.error ?? 'Failed to get habits');
@@ -74,17 +101,7 @@ export function registerHabitTools(server: McpServer, dirs: ResolvedDirs): void 
 
   server.registerTool('update_habit', {
     description: 'Update an existing habit\'s configuration.',
-    inputSchema: {
-      habit_id: z.string().describe('Habit ID to update'),
-      title: z.string().optional().describe('New title'),
-      icon: z.string().optional().describe('New icon'),
-      is_enabled: z.boolean().optional().describe('Whether the habit is enabled'),
-      is_track_streaks: z.boolean().optional().describe('Whether to track streaks for this habit'),
-      streak_mode: streakModeSchema.optional().describe('Streak mode: specific-days or weekly-frequency'),
-      streak_min_value: z.number().int().min(0).optional().describe('Minimum daily value that counts as done for streak purposes'),
-      streak_week_days: streakWeekDaysSchema.optional().describe('Weekdays (0=Sunday..6=Saturday) this habit applies to, for specific-days streak mode'),
-      streak_weekly_frequency: z.number().int().min(0).optional().describe('Target number of completions per week, for weekly-frequency streak mode'),
-    },
+    inputSchema: updateHabitSchema,
   }, async ({ habit_id, title, icon, is_enabled, is_track_streaks, streak_mode, streak_min_value, streak_week_days, streak_weekly_frequency }) => {
     if (!habit_id?.trim()) return errorResult('habit_id is required');
     const data: Record<string, unknown> = {};
@@ -103,10 +120,7 @@ export function registerHabitTools(server: McpServer, dirs: ResolvedDirs): void 
 
   server.registerTool('check_habit', {
     description: 'Check off a habit for a day (defaults to today) by incrementing that day\'s recorded value, matching the Habit Tracker UI\'s own click behavior.',
-    inputSchema: {
-      habit_id: z.string().describe('Habit ID to check off'),
-      date: z.string().optional().describe('Date to check off, YYYY-MM-DD (defaults to today)'),
-    },
+    inputSchema: checkHabitSchema,
   }, async ({ habit_id, date }) => {
     if (!habit_id?.trim()) return errorResult('habit_id is required');
     const data: Record<string, unknown> = {};
@@ -118,7 +132,7 @@ export function registerHabitTools(server: McpServer, dirs: ResolvedDirs): void 
 
   server.registerTool('set_habit_value', {
     description: 'Set a habit\'s exact recorded value for a specific day (defaults to today), for backfilling missed entries or correcting mistakes.',
-    inputSchema: setHabitValueShape,
+    inputSchema: setHabitValueSchema,
   }, async ({ habit_id, value, date }) => {
     if (!habit_id?.trim()) return errorResult('habit_id is required');
     // "Today" is defaulted plugin-side (SP's own clock), not here — the MCP server
@@ -133,9 +147,7 @@ export function registerHabitTools(server: McpServer, dirs: ResolvedDirs): void 
 
   server.registerTool('delete_habit', {
     description: 'Permanently delete a habit.',
-    inputSchema: {
-      habit_id: z.string().describe('Habit ID to delete'),
-    },
+    inputSchema: deleteHabitSchema,
   }, async ({ habit_id }) => {
     if (!habit_id?.trim()) return errorResult('habit_id is required');
     const res = await sendCommand(dirs, 'deleteHabit', { habitId: habit_id });

@@ -92,6 +92,14 @@ describe('habit tool logic', () => {
     it('rejects a negative streak_weekly_frequency', () => {
       expect(createHabitSchema.safeParse({ title: 'X', streak_weekly_frequency: -1 }).success).toBe(false);
     });
+
+    it('rejects an unrecognized parameter, naming it in the error', () => {
+      const result = createHabitSchema.safeParse({ title: 'X', ttile: 'typo' });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('ttile');
+      }
+    });
   });
 
   describe('get_habits via sendCommand', () => {
@@ -221,6 +229,14 @@ describe('habit tool logic', () => {
 
     it('accepts a valid payload', () => {
       expect(setHabitValueSchema.safeParse({ habit_id: 'habit-1', value: 1, date: '2026-08-13' }).success).toBe(true);
+    });
+
+    it('rejects an unrecognized parameter, naming it in the error', () => {
+      const result = setHabitValueSchema.safeParse({ habit_id: 'habit-1', value: 1, vlaue: 2 });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('vlaue');
+      }
     });
   });
 

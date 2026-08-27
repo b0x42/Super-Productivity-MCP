@@ -55,26 +55,161 @@ export function applyTriageFilters(
   return result;
 }
 
+// Every tool schema below is wrapped in `.strict()` so a call with an unrecognized
+// parameter fails validation instead of silently stripping it — issue #101 found
+// this could look like a successful call ("update_task" with a typo'd field name)
+// that silently wrote nothing. Nested array-item schemas (bulk_update_tasks'
+// `updates[]`, create_task's `subtasks[]`) get the same treatment for the same reason.
+
+const createTaskShape = {
+  title: z.string().describe('Task title. May include SP short syntax: #tag +project @due-date 30m'),
+  notes: z.string().optional().describe('Task notes/description'),
+  project_id: z.string().optional().describe('Project ID to assign task to'),
+  parent_id: z.string().optional().describe('Parent task ID for creating subtasks'),
+  tag_ids: z.array(z.string()).optional().describe('Tag IDs to assign'),
+  deadline_day: z.string().optional().describe('Deadline date in ISO format (e.g. 2026-04-20). Independent from due_day/planned_at.'),
+};
+export const createTaskSchema = z.object(createTaskShape).strict();
+
+const getTasksShape = {
+  project_id: z.string().optional().describe('Filter by project ID'),
+  tag_id: z.string().optional().describe('Filter by tag ID'),
+  include_done: z.boolean().optional().default(false).describe('Include completed tasks'),
+  include_archived: z.boolean().optional().default(false).describe('Include archived tasks'),
+  search_query: z.string().optional().describe('Case-insensitive title search'),
+  parents_only: z.boolean().optional().default(false).describe('Exclude subtasks — return only top-level tasks'),
+  overdue: z.boolean().optional().default(false).describe('Return only tasks with a due date strictly before today'),
+  unscheduled: z.boolean().optional().default(false).describe('Return only tasks with no due date and no scheduled time'),
+  planned_for_today: z.boolean().optional().default(false).describe('Return only tasks planned for today (via plannedAt timestamp)'),
+  recurring_only: z.boolean().optional().default(false).describe('Return only recurring tasks (those with a repeatCfgId)'),
+  fields: z.array(z.string()).optional().describe('Return only these fields per task (e.g. ["id", "title", "dueDay"]). Omit for full objects.'),
+};
+export const getTasksSchema = z.object(getTasksShape).strict();
+
+const updateTaskShape = {
+  task_id: z.string().describe('Task ID to update'),
+  title: z.string().optional().describe('New title (may include SP short syntax)'),
+  notes: z.string().optional().describe('New notes'),
+  is_done: z.boolean().optional().describe('Mark as done/undone'),
+  due_day: z.string().optional().describe('Due date in ISO format (e.g. 2026-04-20), or empty string to clear'),
+  deadline_day: z.string().optional().describe('Deadline date in ISO format (e.g. 2026-04-20), or empty string to clear. Independent from due_day/planned_at.'),
+  planned_at: z.number().nullable().optional().describe('Unix ms timestamp to plan task for a specific time (e.g. start of today = plan for today). Pass null to unplan. Independent from due_day.'),
+  time_estimate: z.number().optional().describe('Time estimate in milliseconds'),
+  time_spent: z.number().optional().describe('Time spent in milliseconds'),
+  tag_ids: z.array(z.string()).optional().describe('Bulk-replace all tags with this list (FR-003)'),
+};
+export const updateTaskSchema = z.object(updateTaskShape).strict();
+
+const completeTaskShape = {
+  task_id: z.string().describe('Task ID to complete'),
+};
+export const completeTaskSchema = z.object(completeTaskShape).strict();
+
+const addTagToTaskShape = {
+  task_id: z.string().describe('Task ID'),
+  tag_id: z.string().describe('Tag ID to add'),
+};
+export const addTagToTaskSchema = z.object(addTagToTaskShape).strict();
+
+const removeTagFromTaskShape = {
+  task_id: z.string().describe('Task ID'),
+  tag_id: z.string().describe('Tag ID to remove'),
+};
+export const removeTagFromTaskSchema = z.object(removeTagFromTaskShape).strict();
+
+const getCurrentTaskShape = {};
+export const getCurrentTaskSchema = z.object(getCurrentTaskShape).strict();
+
+const startTaskShape = {
+  task_id: z.string().describe('Task ID to start tracking'),
+};
+export const startTaskSchema = z.object(startTaskShape).strict();
+
+const stopTaskShape = {};
+export const stopTaskSchema = z.object(stopTaskShape).strict();
+
+const bulkCompleteTasksShape = {
+  task_ids: z.array(z.string()).max(100).describe('Array of task IDs to complete'),
+};
+export const bulkCompleteTasksSchema = z.object(bulkCompleteTasksShape).strict();
+
+const bulkUpdateTaskItemShape = {
+  task_id: z.string().describe('Task ID to update'),
+  title: z.string().optional().describe('New title'),
+  notes: z.string().optional().describe('New notes'),
+  due_day: z.string().optional().describe('Due date (YYYY-MM-DD) or empty string to clear'),
+  deadline_day: z.string().optional().describe('Deadline date (YYYY-MM-DD) or empty string to clear'),
+  tag_ids: z.array(z.string()).optional().describe('Replace all tags'),
+  time_estimate: z.number().optional().describe('Time estimate in ms'),
+  time_spent: z.number().optional().describe('Time spent in ms'),
+};
+export const bulkUpdateTaskItemSchema = z.object(bulkUpdateTaskItemShape).strict();
+const bulkUpdateTasksShape = {
+  updates: z.array(bulkUpdateTaskItemSchema).max(100).describe('Array of task updates'),
+};
+export const bulkUpdateTasksSchema = z.object(bulkUpdateTasksShape).strict();
+
+const moveTaskToProjectShape = {
+  task_id: z.string().describe('Task ID to move'),
+  project_id: z.string().describe('Destination project ID'),
+};
+export const moveTaskToProjectSchema = z.object(moveTaskToProjectShape).strict();
+
+const reorderTasksShape = {
+  task_ids: z.array(z.string()).describe('Complete ordered list of task IDs'),
+  context_id: z.string().describe('Project ID (if context_type is "project") or parent task ID (if "parent")'),
+  context_type: z.enum(['project', 'parent']).describe('Whether context_id refers to a project or a parent task'),
+};
+export const reorderTasksSchema = z.object(reorderTasksShape).strict();
+
+const deleteTaskShape = {
+  task_id: z.string().describe('Task ID to delete'),
+};
+export const deleteTaskSchema = z.object(deleteTaskShape).strict();
+
+const subtaskItemSchema = z.object({
+  title: z.string().describe('Subtask title'),
+  notes: z.string().optional().describe('Subtask notes'),
+}).strict();
+const createTaskWithSubtasksShape = {
+  title: z.string().describe('Parent task title'),
+  notes: z.string().optional().describe('Parent task notes'),
+  project_id: z.string().optional().describe('Project ID for the parent task'),
+  tag_ids: z.array(z.string()).optional().describe('Tag IDs for the parent task'),
+  subtasks: z.array(subtaskItemSchema).describe('Subtask definitions'),
+};
+export const createTaskWithSubtasksSchema = z.object(createTaskWithSubtasksShape).strict();
+
+const planTasksForTodayShape = {
+  task_ids: z.array(z.string()).max(100).describe('Task IDs to plan/unplan'),
+  unplan: z.boolean().optional().default(false).describe('If true, removes tasks from today instead of planning them'),
+};
+export const planTasksForTodaySchema = z.object(planTasksForTodayShape).strict();
+
+const getWorklogShape = {
+  start_date: z.string().describe('Start date (ISO format, e.g. 2026-04-14)'),
+  end_date: z.string().describe('End date (ISO format, e.g. 2026-04-20)'),
+};
+export const getWorklogSchema = z.object(getWorklogShape).strict();
+
+const getTaskRepeatCfgsShape = {};
+export const getTaskRepeatCfgsSchema = z.object(getTaskRepeatCfgsShape).strict();
+
 export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
   // create_task
   server.registerTool(
     'create_task',
     {
       description: 'Create a new task in Super Productivity. Supports SP short syntax in the title: #tag, +project (prefix match, min 3 chars), @due-date (e.g. @tomorrow, @friday 3pm), and time estimates (30m, 1h, 1h/2h for spent/estimate). Tasks without a project go to the Inbox.',
-      inputSchema: {
-        title: z.string().describe('Task title. May include SP short syntax: #tag +project @due-date 30m'),
-        notes: z.string().optional().describe('Task notes/description'),
-        project_id: z.string().optional().describe('Project ID to assign task to'),
-        parent_id: z.string().optional().describe('Parent task ID for creating subtasks'),
-        tag_ids: z.array(z.string()).optional().describe('Tag IDs to assign'),
-      },
+      inputSchema: createTaskSchema,
     },
-    async ({ title, notes, project_id, parent_id, tag_ids }) => {
+    async ({ title, notes, project_id, parent_id, tag_ids, deadline_day }) => {
       if (!title?.trim()) return errorResult('Title is required');
 
       const data: Record<string, unknown> = { title, notes: notes ?? '', tagIds: tag_ids ?? [] };
       if (project_id) data.projectId = project_id;
       if (parent_id) data.parentId = parent_id;
+      if (deadline_day !== undefined) data.deadlineDay = deadline_day || null;
 
       // SP auto-assigns plannedAt/dueDay to today when viewing Today context.
       // Passing null satisfies SP's `'dueDay' in additional` guard, preventing auto-scheduling
@@ -108,19 +243,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'get_tasks',
     {
       description: 'Get tasks from Super Productivity with optional filters. By default returns non-done, non-archived tasks.',
-      inputSchema: {
-        project_id: z.string().optional().describe('Filter by project ID'),
-        tag_id: z.string().optional().describe('Filter by tag ID'),
-        include_done: z.boolean().optional().default(false).describe('Include completed tasks'),
-        include_archived: z.boolean().optional().default(false).describe('Include archived tasks'),
-        search_query: z.string().optional().describe('Case-insensitive title search'),
-        parents_only: z.boolean().optional().default(false).describe('Exclude subtasks — return only top-level tasks'),
-        overdue: z.boolean().optional().default(false).describe('Return only tasks with a due date strictly before today'),
-        unscheduled: z.boolean().optional().default(false).describe('Return only tasks with no due date and no scheduled time'),
-        planned_for_today: z.boolean().optional().default(false).describe('Return only tasks planned for today (via plannedAt timestamp)'),
-        recurring_only: z.boolean().optional().default(false).describe('Return only recurring tasks (those with a repeatCfgId)'),
-        fields: z.array(z.string()).optional().describe('Return only these fields per task (e.g. ["id", "title", "dueDay"]). Omit for full objects.'),
-      },
+      inputSchema: getTasksSchema,
     },
     async ({ project_id, tag_id, include_done, include_archived, search_query, parents_only, overdue, unscheduled, planned_for_today, recurring_only, fields }) => {
       const filters: TaskFilters = {
@@ -166,19 +289,9 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'update_task',
     {
       description: 'Update an existing task. Supports SP short syntax in the title.',
-      inputSchema: {
-        task_id: z.string().describe('Task ID to update'),
-        title: z.string().optional().describe('New title (may include SP short syntax)'),
-        notes: z.string().optional().describe('New notes'),
-        is_done: z.boolean().optional().describe('Mark as done/undone'),
-        due_day: z.string().optional().describe('Due date in ISO format (e.g. 2026-04-20), or empty string to clear'),
-        planned_at: z.number().nullable().optional().describe('Unix ms timestamp to plan task for a specific time (e.g. start of today = plan for today). Pass null to unplan. Independent from due_day.'),
-        time_estimate: z.number().optional().describe('Time estimate in milliseconds'),
-        time_spent: z.number().optional().describe('Time spent in milliseconds'),
-        tag_ids: z.array(z.string()).optional().describe('Bulk-replace all tags with this list (FR-003)'),
-      },
+      inputSchema: updateTaskSchema,
     },
-    async ({ task_id, title, notes, is_done, due_day, planned_at, time_estimate, time_spent, tag_ids }) => {
+    async ({ task_id, title, notes, is_done, due_day, deadline_day, planned_at, time_estimate, time_spent, tag_ids }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
 
       const data: Record<string, unknown> = {};
@@ -189,6 +302,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         data.doneOn = is_done ? Date.now() : null;
       }
       if (due_day !== undefined) data.dueDay = due_day || null;
+      if (deadline_day !== undefined) data.deadlineDay = deadline_day || null;
       if (planned_at !== undefined) data.plannedAt = planned_at;
       if (time_estimate !== undefined) data.timeEstimate = time_estimate;
       if (time_spent !== undefined) data.timeSpent = time_spent;
@@ -206,9 +320,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'complete_task',
     {
       description: 'Mark a task as complete in Super Productivity.',
-      inputSchema: {
-        task_id: z.string().describe('Task ID to complete'),
-      },
+      inputSchema: completeTaskSchema,
     },
     async ({ task_id }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
@@ -223,10 +335,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'add_tag_to_task',
     {
       description: 'Add a single tag to a task without modifying its other existing tags. Idempotent: calling with an already-present tag succeeds silently.',
-      inputSchema: {
-        task_id: z.string().describe('Task ID'),
-        tag_id: z.string().describe('Tag ID to add'),
-      },
+      inputSchema: addTagToTaskSchema,
     },
     async ({ task_id, tag_id }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
@@ -242,10 +351,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'remove_tag_from_task',
     {
       description: 'Remove a single tag from a task without modifying its other existing tags. Returns an error if the tag is not currently on the task.',
-      inputSchema: {
-        task_id: z.string().describe('Task ID'),
-        tag_id: z.string().describe('Tag ID to remove'),
-      },
+      inputSchema: removeTagFromTaskSchema,
     },
     async ({ task_id, tag_id }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
@@ -261,7 +367,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'get_current_task',
     {
       description: 'Get the currently time-tracked task in Super Productivity. Returns { task: null } when no task has an active timer.',
-      inputSchema: {},
+      inputSchema: getCurrentTaskSchema,
     },
     async () => {
       const res = await sendCommand(dirs, 'loadCurrentTask', {});
@@ -275,9 +381,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'start_task',
     {
       description: 'Start the time tracker on a task. If another task is being tracked, it will be stopped automatically. Cannot start tracking a completed task.',
-      inputSchema: {
-        task_id: z.string().describe('Task ID to start tracking'),
-      },
+      inputSchema: startTaskSchema,
     },
     async ({ task_id }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
@@ -292,7 +396,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'stop_task',
     {
       description: 'Stop the currently running time tracker. Succeeds silently if no timer is running (idempotent).',
-      inputSchema: {},
+      inputSchema: stopTaskSchema,
     },
     async () => {
       const res = await sendCommand(dirs, 'stopTask', {});
@@ -306,9 +410,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'bulk_complete_tasks',
     {
       description: 'Mark multiple tasks as complete in a single operation. Uses partial-success semantics: each task reports its own success/error.',
-      inputSchema: {
-        task_ids: z.array(z.string()).max(100).describe('Array of task IDs to complete'),
-      },
+      inputSchema: bulkCompleteTasksSchema,
     },
     async ({ task_ids }) => {
       const res = await sendCommand(dirs, 'bulkCompleteTasks', { taskIds: task_ids ?? [] });
@@ -322,17 +424,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'bulk_update_tasks',
     {
       description: 'Update multiple tasks in a single operation. Each item specifies a task_id and the fields to update. Uses partial-success semantics.',
-      inputSchema: {
-        updates: z.array(z.object({
-          task_id: z.string().describe('Task ID to update'),
-          title: z.string().optional().describe('New title'),
-          notes: z.string().optional().describe('New notes'),
-          due_day: z.string().optional().describe('Due date (YYYY-MM-DD) or empty string to clear'),
-          tag_ids: z.array(z.string()).optional().describe('Replace all tags'),
-          time_estimate: z.number().optional().describe('Time estimate in ms'),
-          time_spent: z.number().optional().describe('Time spent in ms'),
-        })).max(100).describe('Array of task updates'),
-      },
+      inputSchema: bulkUpdateTasksSchema,
     },
     async ({ updates }) => {
       const mapped = (updates ?? []).map(u => ({
@@ -341,6 +433,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
           ...(u.title !== undefined && { title: u.title }),
           ...(u.notes !== undefined && { notes: u.notes }),
           ...(u.due_day !== undefined && { dueDay: u.due_day || null }),
+          ...(u.deadline_day !== undefined && { deadlineDay: u.deadline_day || null }),
           ...(u.tag_ids !== undefined && { tagIds: u.tag_ids }),
           ...(u.time_estimate !== undefined && { timeEstimate: u.time_estimate }),
           ...(u.time_spent !== undefined && { timeSpent: u.time_spent }),
@@ -357,10 +450,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'move_task_to_project',
     {
       description: 'Move a top-level task to a different project. Returns an error if called on a subtask.',
-      inputSchema: {
-        task_id: z.string().describe('Task ID to move'),
-        project_id: z.string().describe('Destination project ID'),
-      },
+      inputSchema: moveTaskToProjectSchema,
     },
     async ({ task_id, project_id }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
@@ -376,11 +466,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'reorder_tasks',
     {
       description: 'Reorder tasks within a project or subtasks within a parent task. Provide a complete ordered list of task IDs — partial reordering is not supported.',
-      inputSchema: {
-        task_ids: z.array(z.string()).describe('Complete ordered list of task IDs'),
-        context_id: z.string().describe('Project ID (if context_type is "project") or parent task ID (if "parent")'),
-        context_type: z.enum(['project', 'parent']).describe('Whether context_id refers to a project or a parent task'),
-      },
+      inputSchema: reorderTasksSchema,
     },
     async ({ task_ids, context_id, context_type }) => {
       if (!task_ids?.length) return errorResult('task_ids must not be empty');
@@ -396,9 +482,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'delete_task',
     {
       description: 'Permanently delete a task. Deleting a parent also removes all subtasks.',
-      inputSchema: {
-        task_id: z.string().describe('Task ID to delete'),
-      },
+      inputSchema: deleteTaskSchema,
     },
     async ({ task_id }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
@@ -413,16 +497,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'create_task_with_subtasks',
     {
       description: 'Create a parent task with subtasks in one operation. Returns parentId and subtaskIds.',
-      inputSchema: {
-        title: z.string().describe('Parent task title'),
-        notes: z.string().optional().describe('Parent task notes'),
-        project_id: z.string().optional().describe('Project ID for the parent task'),
-        tag_ids: z.array(z.string()).optional().describe('Tag IDs for the parent task'),
-        subtasks: z.array(z.object({
-          title: z.string().describe('Subtask title'),
-          notes: z.string().optional().describe('Subtask notes'),
-        })).describe('Subtask definitions'),
-      },
+      inputSchema: createTaskWithSubtasksSchema,
     },
     async ({ title, notes, project_id, tag_ids, subtasks }) => {
       if (!title?.trim()) return errorResult('Title is required');
@@ -444,10 +519,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'plan_tasks_for_today',
     {
       description: 'Plan multiple tasks for today (adds to Today view) or unplan them. Uses partial-success semantics.',
-      inputSchema: {
-        task_ids: z.array(z.string()).max(100).describe('Task IDs to plan/unplan'),
-        unplan: z.boolean().optional().default(false).describe('If true, removes tasks from today instead of planning them'),
-      },
+      inputSchema: planTasksForTodaySchema,
     },
     async ({ task_ids, unplan }) => {
       if (!task_ids?.length) return okResult({ results: [] });
@@ -465,10 +537,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'get_worklog',
     {
       description: 'Get a worklog summary for a date range: time spent per day, per project, per tag, tasks completed, and estimate vs actual accuracy.',
-      inputSchema: {
-        start_date: z.string().describe('Start date (ISO format, e.g. 2026-04-14)'),
-        end_date: z.string().describe('End date (ISO format, e.g. 2026-04-20)'),
-      },
+      inputSchema: getWorklogSchema,
     },
     async ({ start_date, end_date }) => {
       if (!start_date || !end_date) return errorResult('start_date and end_date are required');
@@ -531,7 +600,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     'get_task_repeat_cfgs',
     {
       description: 'Get all recurring task configurations (taskRepeatCfg) from Super Productivity. Returns repeat schedules with their cycle, frequency, day settings, and associated task metadata.',
-      inputSchema: {},
+      inputSchema: getTaskRepeatCfgsSchema,
     },
     async () => {
       const res = await sendCommand(dirs, 'getTaskRepeatCfgs');

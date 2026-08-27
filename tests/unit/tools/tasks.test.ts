@@ -6,9 +6,17 @@ vi.mock('../../../src/ipc/command-sender.js', () => ({
 }));
 
 import { sendCommand } from '../../../src/ipc/command-sender.js';
-import { applyTriageFilters, localDateStr } from '../../../src/tools/tasks.js';
+import {
+  applyTriageFilters,
+  localDateStr,
+  updateTaskSchema,
+  createTaskWithSubtasksSchema,
+  bulkUpdateTasksSchema,
+  registerTaskTools,
+} from '../../../src/tools/tasks.js';
 import type { ResolvedDirs } from '../../../src/ipc/directories.js';
 import type { Response } from '../../../src/ipc/types.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 const mockSend = vi.mocked(sendCommand);
 const dirs: ResolvedDirs = { base: '/tmp/test', commands: '/tmp/test/pc', responses: '/tmp/test/pr' };
@@ -16,6 +24,19 @@ const dirs: ResolvedDirs = { base: '/tmp/test', commands: '/tmp/test/pc', respon
 // Instead of testing through McpServer (which has no public API to call tools),
 // we test the sendCommand integration and filtering logic directly.
 // The tool registration is verified by the build + integration tests.
+//
+// The deadline_day mapping tests below are the exception: they capture each
+// tool's real registered handler and invoke it directly, so the actual
+// `deadline_day` -> `deadlineDay` mapping in tasks.ts is exercised, not just
+// hand-constructed expected sendCommand args.
+type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>;
+const toolHandlers = new Map<string, ToolHandler>();
+const fakeServer = {
+  registerTool: (name: string, _config: unknown, handler: ToolHandler) => {
+    toolHandlers.set(name, handler);
+  },
+} as unknown as McpServer;
+registerTaskTools(fakeServer, dirs);
 
 function mockResponse(result: unknown): Response {
   return { success: true, result, timestamp: Date.now() };
@@ -34,6 +55,14 @@ describe('task tool logic', () => {
       expect(res.result).toBe('task-123');
       expect(mockSend).toHaveBeenCalledWith(dirs, 'addTask', {
         data: { title: 'Test task', notes: 'Some notes', tagIds: [] },
+      });
+    });
+
+    it('sends addTask with deadlineDay set (via real create_task handler)', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse('task-124'));
+      await toolHandlers.get('create_task')!({ title: 'Test task', deadline_day: '2026-12-01' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'addTask', {
+        data: expect.objectContaining({ deadlineDay: '2026-12-01' }),
       });
     });
   });
@@ -128,6 +157,48 @@ describe('task tool logic', () => {
       expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
         data: { plannedAt: null },
       }));
+    });
+
+    it('sets deadlineDay (via real update_task handler)', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await toolHandlers.get('update_task')!({ task_id: 'task-1', deadline_day: '2026-12-01' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', {
+        taskId: 'task-1',
+        data: { deadlineDay: '2026-12-01' },
+      });
+    });
+
+    it('clears deadlineDay with empty string mapped to null (via real update_task handler)', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await toolHandlers.get('update_task')!({ task_id: 'task-1', deadline_day: '' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', {
+        taskId: 'task-1',
+        data: { deadlineDay: null },
+      });
+    });
+
+    it('updates title without touching deadlineDay when deadline_day is omitted (via real update_task handler)', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await toolHandlers.get('update_task')!({ task_id: 'task-1', title: 'Renamed' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', {
+        taskId: 'task-1',
+        data: { title: 'Renamed' },
+      });
+    });
+  });
+
+  describe('update_task schema — strict unknown-key rejection', () => {
+    it('rejects an unrecognized top-level parameter, naming it in the error', () => {
+      const result = updateTaskSchema.safeParse({ task_id: 'task-1', deadlin_day: '2026-12-01' });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('deadlin_day');
+      }
+    });
+
+    it('accepts a call using only documented parameters, including deadline_day', () => {
+      const result = updateTaskSchema.safeParse({ task_id: 'task-1', deadline_day: '2026-12-01' });
+      expect(result.success).toBe(true);
     });
   });
 
@@ -368,6 +439,62 @@ describe('task tool logic', () => {
       expect(res.success).toBe(true);
       expect(mockSend).toHaveBeenCalledWith(dirs, 'bulkUpdateTasks', { updates: [{ taskId: 't1', data: { dueDay: '2026-05-01' } }] });
     });
+
+    it('maps deadline_day per item independently across multiple updates (via real bulk_update_tasks handler)', async () => {
+      const results = { results: [{ id: 't1', success: true }, { id: 't2', success: true }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      await toolHandlers.get('bulk_update_tasks')!({
+        updates: [
+          { task_id: 't1', deadline_day: '2026-12-01' },
+          { task_id: 't2', deadline_day: '' },
+        ],
+      });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'bulkUpdateTasks', {
+        updates: [
+          { taskId: 't1', data: { deadlineDay: '2026-12-01' } },
+          { taskId: 't2', data: { deadlineDay: null } },
+        ],
+      });
+    });
+
+    it('one invalid task_id does not block other items in the same batch', async () => {
+      const results = {
+        results: [
+          { id: 't1', success: true },
+          { id: 'bad', success: false, error: 'Task not found: bad' },
+        ],
+      };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkUpdateTasks', {
+        updates: [
+          { taskId: 't1', data: { deadlineDay: '2026-12-01' } },
+          { taskId: 'bad', data: { deadlineDay: '2026-12-01' } },
+        ],
+      });
+      expect(res.success).toBe(true);
+      const items = (res.result as typeof results).results;
+      expect(items.find(i => i.id === 't1')?.success).toBe(true);
+      expect(items.find(i => i.id === 'bad')?.success).toBe(false);
+    });
+  });
+
+  describe('bulk_update_tasks schema — strict unknown-key rejection (including nested items)', () => {
+    it('accepts updates using only documented parameters, including deadline_day', () => {
+      const result = bulkUpdateTasksSchema.safeParse({
+        updates: [{ task_id: 't1', deadline_day: '2026-12-01' }],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects an unrecognized key nested inside one updates[] item, naming it in the error', () => {
+      const result = bulkUpdateTasksSchema.safeParse({
+        updates: [{ task_id: 't1', deadlin_day: '2026-12-01' }],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('deadlin_day');
+      }
+    });
   });
 
   // T006: US1 — timer control operations (003-FR-001, 003-FR-002)
@@ -494,6 +621,27 @@ describe('task tool logic', () => {
       mockSend.mockResolvedValueOnce({ success: false, error: 'Title is required', timestamp: Date.now() });
       const res = await sendCommand(dirs, 'createTaskWithSubtasks', { data: { title: '' } });
       expect(res.success).toBe(false);
+    });
+  });
+
+  describe('create_task_with_subtasks schema — strict unknown-key rejection (including nested subtasks[])', () => {
+    it('accepts a call using only documented parameters', () => {
+      const result = createTaskWithSubtasksSchema.safeParse({
+        title: 'Plan',
+        subtasks: [{ title: 'Sub 1' }],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects an unrecognized key nested inside one subtasks[] item, naming it in the error', () => {
+      const result = createTaskWithSubtasksSchema.safeParse({
+        title: 'Plan',
+        subtasks: [{ title: 'Sub 1', bogus_field: 'x' }],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('bogus_field');
+      }
     });
   });
 
