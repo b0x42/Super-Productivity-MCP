@@ -59,7 +59,7 @@ function parseAtDateSyntax(title, now = new Date()) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseAtDateSyntax };
+  module.exports = { parseAtDateSyntax, executeCommand };
 }
 
 // Local YYYY-MM-DD for "today", matching how SP's own getDbDateStr keys countOnDay
