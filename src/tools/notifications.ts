@@ -4,14 +4,18 @@ import type { ResolvedDirs } from '../ipc/directories.js';
 import { sendCommand } from '../ipc/command-sender.js';
 import { errorResult, okResult } from './result.js';
 
+// .strict() rejects unrecognized parameters instead of silently dropping them — see tasks.ts.
+
+const showNotificationShape = {
+  message: z.string().describe('Notification message'),
+  type: z.enum(['SUCCESS', 'INFO', 'WARNING', 'ERROR']).optional().default('INFO').describe('Notification type'),
+};
+export const showNotificationSchema = z.object(showNotificationShape).strict();
 
 export function registerNotificationTools(server: McpServer, dirs: ResolvedDirs): void {
   server.registerTool('show_notification', {
     description: 'Show a notification (snackbar) in Super Productivity\'s UI.',
-    inputSchema: {
-      message: z.string().describe('Notification message'),
-      type: z.enum(['SUCCESS', 'INFO', 'WARNING', 'ERROR']).optional().default('INFO').describe('Notification type'),
-    },
+    inputSchema: showNotificationSchema,
   }, async ({ message, type }) => {
     if (!message?.trim()) return errorResult('Message is required');
     const res = await sendCommand(dirs, 'showSnack', { message, data: { type } });

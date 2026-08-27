@@ -37,8 +37,8 @@ Each group below writes the failing test(s) first, then the implementation that 
 
 ## 8. Strict schemas: notifications.ts
 
-- [ ] 8.1 In `tests/unit/tools/notifications.test.ts`, add tests: unrecognized-parameter rejection (naming the parameter) and known-parameters-still-accepted.
-- [ ] 8.2 In `src/tools/notifications.ts`, apply `.strict()` to every registered tool's inputSchema, passing the schema instance into `registerTool`.
+- [x] 8.1 In `tests/unit/tools/notifications.test.ts`, add tests: unrecognized-parameter rejection (naming the parameter) and known-parameters-still-accepted.
+- [x] 8.2 In `src/tools/notifications.ts`, apply `.strict()` to every registered tool's inputSchema, passing the schema instance into `registerTool`.
 
 ## 9. Strict schemas: diagnostics.ts
 
