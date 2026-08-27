@@ -255,6 +255,12 @@ async function executeCommand(command) {
         } else if (result) {
           await PluginAPI.updateTask(result, { plannedAt: null, dueDay: null });
         }
+        // PluginAPI.addTask() silently ignores fields outside its own known creation
+        // set (same reason dueDay above needs a follow-up updateTask) — deadlineDay
+        // passed via the initial addTask({ ...d }) spread never actually persists.
+        if (result && 'deadlineDay' in d) {
+          await PluginAPI.updateTask(result, { deadlineDay: d.deadlineDay });
+        }
         break;
       }
       case 'getTasks': {
@@ -409,8 +415,16 @@ async function executeCommand(command) {
         break;
       }
       case 'bulkUpdateTasks': {
+        // PluginAPI.updateTask() no-ops (doesn't throw) for a nonexistent taskId — same
+        // quirk startTask works around below — so an invalid task_id here would silently
+        // report success without a pre-check, contradicting the partial-success spec.
+        const allTaskIdsForBulkUpdate = new Set((await PluginAPI.getTasks()).map(t => t.id));
         const results = [];
         for (const item of (command.updates || [])) {
+          if (!allTaskIdsForBulkUpdate.has(item.taskId)) {
+            results.push({ id: item.taskId, success: false, error: `Task not found: ${item.taskId}` });
+            continue;
+          }
           try {
             await PluginAPI.updateTask(item.taskId, item.data || {});
             results.push({ id: item.taskId, success: true });
