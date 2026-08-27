@@ -6,7 +6,13 @@ vi.mock('../../../src/ipc/command-sender.js', () => ({
 }));
 
 import { sendCommand } from '../../../src/ipc/command-sender.js';
-import { applyTriageFilters, localDateStr } from '../../../src/tools/tasks.js';
+import {
+  applyTriageFilters,
+  localDateStr,
+  updateTaskSchema,
+  createTaskWithSubtasksSchema,
+  bulkUpdateTasksSchema,
+} from '../../../src/tools/tasks.js';
 import type { ResolvedDirs } from '../../../src/ipc/directories.js';
 import type { Response } from '../../../src/ipc/types.js';
 
@@ -35,6 +41,16 @@ describe('task tool logic', () => {
       expect(mockSend).toHaveBeenCalledWith(dirs, 'addTask', {
         data: { title: 'Test task', notes: 'Some notes', tagIds: [] },
       });
+    });
+
+    it('sends addTask with deadlineDay set', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse('task-124'));
+      await sendCommand(dirs, 'addTask', {
+        data: { title: 'Test task', notes: '', tagIds: [], deadlineDay: '2026-12-01' },
+      });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'addTask', expect.objectContaining({
+        data: expect.objectContaining({ deadlineDay: '2026-12-01' }),
+      }));
     });
   });
 
@@ -128,6 +144,46 @@ describe('task tool logic', () => {
       expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
         data: { plannedAt: null },
       }));
+    });
+
+    it('sets deadlineDay', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await sendCommand(dirs, 'updateTask', { taskId: 'task-1', data: { deadlineDay: '2026-12-01' } });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
+        data: { deadlineDay: '2026-12-01' },
+      }));
+    });
+
+    it('clears deadlineDay with empty string mapped to null', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await sendCommand(dirs, 'updateTask', { taskId: 'task-1', data: { deadlineDay: null } });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', expect.objectContaining({
+        data: { deadlineDay: null },
+      }));
+    });
+
+    it('updates title without touching deadlineDay when deadline_day is omitted', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await sendCommand(dirs, 'updateTask', { taskId: 'task-1', data: { title: 'Renamed' } });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', {
+        taskId: 'task-1',
+        data: { title: 'Renamed' },
+      });
+    });
+  });
+
+  describe('update_task schema — strict unknown-key rejection', () => {
+    it('rejects an unrecognized top-level parameter, naming it in the error', () => {
+      const result = updateTaskSchema.safeParse({ task_id: 'task-1', deadlin_day: '2026-12-01' });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('deadlin_day');
+      }
+    });
+
+    it('accepts a call using only documented parameters, including deadline_day', () => {
+      const result = updateTaskSchema.safeParse({ task_id: 'task-1', deadline_day: '2026-12-01' });
+      expect(result.success).toBe(true);
     });
   });
 
@@ -368,6 +424,63 @@ describe('task tool logic', () => {
       expect(res.success).toBe(true);
       expect(mockSend).toHaveBeenCalledWith(dirs, 'bulkUpdateTasks', { updates: [{ taskId: 't1', data: { dueDay: '2026-05-01' } }] });
     });
+
+    it('maps deadline_day per item independently across multiple updates', async () => {
+      const results = { results: [{ id: 't1', success: true }, { id: 't2', success: true }] };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkUpdateTasks', {
+        updates: [
+          { taskId: 't1', data: { deadlineDay: '2026-12-01' } },
+          { taskId: 't2', data: { deadlineDay: null } },
+        ],
+      });
+      expect(res.success).toBe(true);
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'bulkUpdateTasks', {
+        updates: [
+          { taskId: 't1', data: { deadlineDay: '2026-12-01' } },
+          { taskId: 't2', data: { deadlineDay: null } },
+        ],
+      });
+    });
+
+    it('one invalid task_id does not block other items in the same batch', async () => {
+      const results = {
+        results: [
+          { id: 't1', success: true },
+          { id: 'bad', success: false, error: 'Task not found: bad' },
+        ],
+      };
+      mockSend.mockResolvedValueOnce(mockResponse(results));
+      const res = await sendCommand(dirs, 'bulkUpdateTasks', {
+        updates: [
+          { taskId: 't1', data: { deadlineDay: '2026-12-01' } },
+          { taskId: 'bad', data: { deadlineDay: '2026-12-01' } },
+        ],
+      });
+      expect(res.success).toBe(true);
+      const items = (res.result as typeof results).results;
+      expect(items.find(i => i.id === 't1')?.success).toBe(true);
+      expect(items.find(i => i.id === 'bad')?.success).toBe(false);
+    });
+  });
+
+  describe('bulk_update_tasks schema — strict unknown-key rejection (including nested items)', () => {
+    it('accepts updates using only documented parameters, including deadline_day', () => {
+      const result = bulkUpdateTasksSchema.safeParse({
+        updates: [{ task_id: 't1', deadline_day: '2026-12-01' }],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects an unrecognized key nested inside one updates[] item, naming it in the error', () => {
+      const result = bulkUpdateTasksSchema.safeParse({
+        updates: [{ task_id: 't1', deadlin_day: '2026-12-01' }],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('deadlin_day');
+      }
+    });
   });
 
   // T006: US1 — timer control operations (003-FR-001, 003-FR-002)
@@ -494,6 +607,27 @@ describe('task tool logic', () => {
       mockSend.mockResolvedValueOnce({ success: false, error: 'Title is required', timestamp: Date.now() });
       const res = await sendCommand(dirs, 'createTaskWithSubtasks', { data: { title: '' } });
       expect(res.success).toBe(false);
+    });
+  });
+
+  describe('create_task_with_subtasks schema — strict unknown-key rejection (including nested subtasks[])', () => {
+    it('accepts a call using only documented parameters', () => {
+      const result = createTaskWithSubtasksSchema.safeParse({
+        title: 'Plan',
+        subtasks: [{ title: 'Sub 1' }],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects an unrecognized key nested inside one subtasks[] item, naming it in the error', () => {
+      const result = createTaskWithSubtasksSchema.safeParse({
+        title: 'Plan',
+        subtasks: [{ title: 'Sub 1', bogus_field: 'x' }],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('bogus_field');
+      }
     });
   });
 

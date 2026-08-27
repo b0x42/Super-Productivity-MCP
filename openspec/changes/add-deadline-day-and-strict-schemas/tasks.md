@@ -2,23 +2,23 @@ Each group below writes the failing test(s) first, then the implementation that 
 
 ## 1. deadline_day: update_task
 
-- [ ] 1.1 In `tests/unit/tools/tasks.test.ts`, add tests for `update_task`: `deadline_day` set to a date sets `data.deadlineDay`; `deadline_day` = `""` sets `data.deadlineDay` to `null`; omitting `deadline_day` leaves no `deadlineDay` key on `data`.
-- [ ] 1.2 In `src/tools/tasks.ts`, add `deadline_day: z.string().optional()` to `update_task`'s inputSchema; in the handler, `if (deadline_day !== undefined) data.deadlineDay = deadline_day || null;` (mirrors the existing `due_day` line).
+- [x] 1.1 In `tests/unit/tools/tasks.test.ts`, add tests for `update_task`: `deadline_day` set to a date sets `data.deadlineDay`; `deadline_day` = `""` sets `data.deadlineDay` to `null`; omitting `deadline_day` leaves no `deadlineDay` key on `data`.
+- [x] 1.2 In `src/tools/tasks.ts`, add `deadline_day: z.string().optional()` to `update_task`'s inputSchema; in the handler, `if (deadline_day !== undefined) data.deadlineDay = deadline_day || null;` (mirrors the existing `due_day` line).
 
 ## 2. deadline_day: create_task
 
-- [ ] 2.1 In `tests/unit/tools/tasks.test.ts`, add a test: `create_task` with `deadline_day` set includes `deadlineDay` equal to the given value in the created task's data.
-- [ ] 2.2 In `src/tools/tasks.ts`, add `deadline_day: z.string().optional()` to `create_task`'s inputSchema and map it in the handler to `data.deadlineDay`.
+- [x] 2.1 In `tests/unit/tools/tasks.test.ts`, add a test: `create_task` with `deadline_day` set includes `deadlineDay` equal to the given value in the created task's data.
+- [x] 2.2 In `src/tools/tasks.ts`, add `deadline_day: z.string().optional()` to `create_task`'s inputSchema and map it in the handler to `data.deadlineDay`.
 
 ## 3. deadline_day: bulk_update_tasks (with partial-success)
 
-- [ ] 3.1 In `tests/unit/tools/tasks.test.ts`, add tests: multiple updates each with a different `deadline_day` map independently in the `mapped` array; and one update with an invalid `task_id` reports its own error while the other items' `deadline_day` updates still succeed.
-- [ ] 3.2 In `src/tools/tasks.ts`, add `deadline_day: z.string().optional()` to each item of `bulk_update_tasks`'s `updates` array schema and map it the same way as `due_day`.
+- [x] 3.1 In `tests/unit/tools/tasks.test.ts`, add tests: multiple updates each with a different `deadline_day` map independently in the `mapped` array; and one update with an invalid `task_id` reports its own error while the other items' `deadline_day` updates still succeed.
+- [x] 3.2 In `src/tools/tasks.ts`, add `deadline_day: z.string().optional()` to each item of `bulk_update_tasks`'s `updates` array schema and map it the same way as `due_day`.
 
 ## 4. Strict schemas: tasks.ts (top-level and nested)
 
-- [ ] 4.1 In `tests/unit/tools/tasks.test.ts`, add tests: an unrecognized top-level parameter on a representative tool (e.g. `update_task`) is rejected with an error naming that parameter; known-parameters-only calls still succeed; an unrecognized key nested inside one `bulk_update_tasks` `updates[]` item is rejected; an unrecognized key nested inside one `create_task` `subtasks[]` item (`tasks.ts:421`) is rejected.
-- [ ] 4.2 In `src/tools/tasks.ts`, wrap every `registerTool` call's inputSchema shape in `z.object({...}).strict()` (or equivalent) for all tools in this file — passing the resulting schema instance itself into `registerTool`'s `inputSchema`, not the raw shape — including the nested `updates[]` item schema in `bulk_update_tasks` and the nested `subtasks[]` item schema in `create_task`. Add a short comment at each `.strict()` site noting *why* it's required (issue #101's silent-drop bug), per the project's comment-the-why convention.
+- [x] 4.1 In `tests/unit/tools/tasks.test.ts`, add tests: an unrecognized top-level parameter on a representative tool (e.g. `update_task`) is rejected with an error naming that parameter; known-parameters-only calls still succeed; an unrecognized key nested inside one `bulk_update_tasks` `updates[]` item is rejected; an unrecognized key nested inside one `create_task` `subtasks[]` item (`tasks.ts:421`) is rejected.
+- [x] 4.2 In `src/tools/tasks.ts`, wrap every `registerTool` call's inputSchema shape in `z.object({...}).strict()` (or equivalent) for all tools in this file — passing the resulting schema instance itself into `registerTool`'s `inputSchema`, not the raw shape — including the nested `updates[]` item schema in `bulk_update_tasks` and the nested `subtasks[]` item schema in `create_task`. Add a short comment at each `.strict()` site noting *why* it's required (issue #101's silent-drop bug), per the project's comment-the-why convention.
 
 ## 5. Strict schemas: projects.ts
 
