@@ -6,7 +6,8 @@
   "manifestVersion": 1,
   "minSupVersion": "14.0.0",
   "permissions": [
-    "nodeExecution"
+    "nodeExecution",
+    "showIndexHtmlAsView"
   ],
   "hooks": [
     "taskUpdate",
@@ -15,7 +16,7 @@
     "currentTaskChange"
   ],
   "iFrame": true,
-  "isSkipMenuEntry": true,
+  "isSkipMenuEntry": false,
   "icon": "icon.svg",
   "categories": [
     "integration",

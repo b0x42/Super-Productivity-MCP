@@ -172,6 +172,22 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 
 Habit tools (`create_habit`, `get_habits`, `update_habit`, `check_habit`, `set_habit_value`, `delete_habit`) require a Super Productivity build newer than the `14.0.0` minimum above — on older builds they return a clear "requires a newer version" error instead of failing silently.
 
+## Tool Call Timeline
+
+The plugin adds a **MCP Bridge** pane to Super Productivity's menu listing what
+the assistant has done — one row per tool call with the time, tool name,
+duration, and whether it succeeded. Click a row to see the arguments it was
+called with and the result it returned; failures show the error message.
+
+The server writes each call to `tool-calls.jsonl` in the same data directory it
+uses for IPC (`debug_directories` shows the path). The log keeps the most recent
+500 calls and is created mode 0600. Individual arguments or results over 8KB are
+replaced by a marker recording how many bytes were elided, so a `get_tasks` over
+a large task list doesn't copy your database into a flat file.
+
+Recording is best-effort: if the log can't be written, the tool call still
+succeeds and returns normally.
+
 ## SP Short Syntax
 
 Include these in task titles and they are parsed automatically:
