@@ -106,6 +106,8 @@ user's entire task list. The log must stay bounded without the user managing it.
 ### Functional Requirements — Pane
 
 - **FR-011**: The plugin MUST expose its iframe pane in Super Productivity's menu (`isSkipMenuEntry: false`)
+- **FR-011a**: `plugin/manifest.json` MUST declare the `showIndexHtmlAsView` permission, which SP requires to display plugin UI at all. The manifest currently declares only `nodeExecution`
+- **FR-011b**: The pane MUST read the log via the `executeNodeScript` proxied into the iframe, not via a `postMessage` bridge to `plugin.js`
 - **FR-012**: The pane MUST read the log and render entries newest-first
 - **FR-013**: Each row MUST show local time, tool name, duration, and success/error status
 - **FR-014**: Clicking a row MUST reveal the recorded arguments and result
@@ -133,7 +135,8 @@ user's entire task list. The log must stay bounded without the user managing it.
 
 ## Assumptions
 
-- **Iframe context is unverified.** `plugin/index.html` currently loads `plugin.js` itself, so whether SP injects `PluginAPI` into the iframe — or whether iframe and background script are separate contexts — cannot be determined from this repo alone. Implementation MUST verify this before building the UI. If the iframe cannot reach `executeNodeScript`, the fallback is for the background script to read the log and push it to the iframe via `postMessage`. Both paths satisfy every requirement above; only the plumbing differs.
+- **Iframe context — resolved from SP's plugin development guide.** Iframe plugins receive a filtered `window.PluginAPI` injected into `index.html`, and `executeNodeScript` is proxied through the host bridge for iframe plugins whenever the desktop app has granted `nodeExecution` — which this plugin already requests. The pane can therefore read the log directly and needs no `postMessage` bridge. What remains host-only is callback-heavy registration (`registerHeaderButton`, `registerMenuEntry`, `registerSidePanelButton`, `registerShortcut`, `registerConfigHandler`); this feature registers none of them, so `plugin.js` keeps its current role. Implementation should still confirm the proxy responds on first run — one `executeNodeScript` call from the iframe before the UI is built on top of it — since this is documented behaviour rather than something observed in this repo.
+- The stub iframe has never been reachable: SP requires the `showIndexHtmlAsView` permission to display plugin UI, and the manifest does not declare it (FR-011a). Enabling the pane means adding the permission, not just flipping `isSkipMenuEntry`.
 - Both sides already resolve the same base directory (`src/ipc/directories.ts` and the plugin's own probe), so the log needs no new path logic.
 - No protocol version bump: the log is written and read outside the command/response protocol.
 - Concurrent servers are tolerated, not coordinated — no lock file. Last-writer-wins on prune is acceptable for a log.
