@@ -9,6 +9,24 @@ import { registerHabitTools } from './tools/habits.js';
 import { registerNotificationTools } from './tools/notifications.js';
 import { registerDiagnosticTools } from './tools/diagnostics.js';
 import { registerResources } from './resources/index.js';
+import { createRecorder } from './recording/recorder.js';
+import { instrumentServer } from './recording/instrument.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * Read the version from package.json rather than repeating it here — the
+ * hardcoded copy went stale at the 1.7.0 release without anything noticing.
+ * The relative path resolves the same from src/ and from the bundled dist/.
+ */
+export function readPackageVersion(): string {
+  try {
+    const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
+    return JSON.parse(readFileSync(pkgPath, 'utf-8')).version as string;
+  } catch {
+    return '0.0.0';
+  }
+}
 
 export function createServer(): { server: McpServer; dirs: ResolvedDirs } {
   const dirs = resolveDirectories();
@@ -16,16 +34,20 @@ export function createServer(): { server: McpServer; dirs: ResolvedDirs } {
 
   const server = new McpServer({
     name: 'super-productivity',
-    version: '1.6.0',
+    version: readPackageVersion(),
   });
 
-  registerTaskTools(server, dirs);
-  registerProjectTools(server, dirs);
-  registerTagTools(server, dirs);
-  registerHabitTools(server, dirs);
-  registerNotificationTools(server, dirs);
-  registerDiagnosticTools(server, dirs);
-  registerResources(server, dirs);
+  // Every tool registers through the instrumented wrapper, so all of them are
+  // recorded without a per-tool change. Non-tool members pass straight through.
+  const recording = instrumentServer(server, createRecorder(dirs));
+
+  registerTaskTools(recording, dirs);
+  registerProjectTools(recording, dirs);
+  registerTagTools(recording, dirs);
+  registerHabitTools(recording, dirs);
+  registerNotificationTools(recording, dirs);
+  registerDiagnosticTools(recording, dirs);
+  registerResources(recording, dirs);
 
   return { server, dirs };
 }
