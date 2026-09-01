@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "prepublishOnly": "npm run build",
-    "build:plugin": "cd plugin && zip -r ../dist/plugin.zip manifest.json plugin.js dashboard.js index.html icon.svg"
+    "build:plugin": "node scripts/build-plugin.mjs"
   },
   "files": [
     "dist",
