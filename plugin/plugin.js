@@ -1,5 +1,9 @@
 // MCP Bridge Plugin for Super Productivity
 const PROTOCOL_VERSION = 1;
+// Kept in step with plugin/manifest.json by tests/unit/plugin/version.test.ts —
+// this was a literal in the ping handler and check_connection reported 1.6.0
+// from a 1.7.0 plugin for a whole release.
+const PLUGIN_VERSION = '1.7.0';
 const POLL_INTERVAL_MS = 2000;
 let commandDir = null;
 let responseDir = null;
@@ -59,7 +63,7 @@ function parseAtDateSyntax(title, now = new Date()) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseAtDateSyntax, executeCommand };
+  module.exports = { parseAtDateSyntax, executeCommand, PLUGIN_VERSION };
 }
 
 // Set one day's entry in a timeSpentOnDay map and recompute the derived total.
@@ -644,7 +648,7 @@ async function executeCommand(command) {
         break;
       }
       case 'ping':
-        result = { pong: true, pluginVersion: '1.6.0', protocolVersion: PROTOCOL_VERSION };
+        result = { pong: true, pluginVersion: PLUGIN_VERSION, protocolVersion: PROTOCOL_VERSION };
         break;
       default:
         return { success: false, error: `Unknown command action: ${command.action}`, timestamp: Date.now() };
