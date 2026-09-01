@@ -96,7 +96,6 @@ const updateTaskShape = {
   deadline_day: z.string().optional().describe('Deadline date in ISO format (e.g. 2026-04-20), or empty string to clear. Independent from due_day/planned_at.'),
   planned_at: z.number().nullable().optional().describe('Unix ms timestamp to plan task for a specific time (e.g. start of today = plan for today). Pass null to unplan. Independent from due_day.'),
   time_estimate: z.number().optional().describe('Time estimate in milliseconds'),
-  time_spent: z.number().optional().describe('Time spent in milliseconds'),
   tag_ids: z.array(z.string()).optional().describe('Bulk-replace all tags with this list (FR-003)'),
 };
 export const updateTaskSchema = z.object(updateTaskShape).strict();
@@ -142,7 +141,6 @@ const bulkUpdateTaskItemShape = {
   deadline_day: z.string().optional().describe('Deadline date (YYYY-MM-DD) or empty string to clear'),
   tag_ids: z.array(z.string()).optional().describe('Replace all tags'),
   time_estimate: z.number().optional().describe('Time estimate in ms'),
-  time_spent: z.number().optional().describe('Time spent in ms'),
 };
 export const bulkUpdateTaskItemSchema = z.object(bulkUpdateTaskItemShape).strict();
 const bulkUpdateTasksShape = {
@@ -193,11 +191,18 @@ const getWorklogShape = {
 };
 export const getWorklogSchema = z.object(getWorklogShape).strict();
 
+const worklogEntryShape = {
+  date: z.string().describe('Day to log against (ISO format, e.g. 2026-08-31)'),
+  duration: z.string().describe('Duration in SP short syntax: 2h, 45m, 1h30m, 90s'),
+};
+export const worklogEntrySchema = z.object(worklogEntryShape).strict();
+
 const logTimeShape = {
   task_id: z.string().describe('Task ID to log time against'),
-  duration: z.string().describe('Duration in SP short syntax: 2h, 45m, 1h30m, 90s'),
-  date: z.string().optional().describe('Day to log against (ISO format, e.g. 2026-08-31). Defaults to today.'),
-  mode: z.enum(['add', 'set']).optional().default('add').describe('"add" increments that day\'s tracked time; "set" overwrites it — pass 0m with "set" to clear the day'),
+  duration: z.string().optional().describe('Duration in SP short syntax: 2h, 45m, 1h30m, 90s. Single-day form — mutually exclusive with entries.'),
+  date: z.string().optional().describe('Day to log against (ISO format, e.g. 2026-08-31). Defaults to today. Only meaningful alongside duration.'),
+  entries: z.array(worklogEntrySchema).max(100).optional().describe('Log several days in one call, e.g. backfilling a week. Each entry needs its own date. Mutually exclusive with duration.'),
+  mode: z.enum(['add', 'set']).optional().default('add').describe('"add" increments each day\'s tracked time; "set" overwrites it — pass 0m with "set" to clear a day. Applies to every entry.'),
 };
 export const logTimeSchema = z.object(logTimeShape).strict();
 
@@ -297,10 +302,10 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
   server.registerTool(
     'update_task',
     {
-      description: 'Update an existing task. Supports SP short syntax in the title.',
+      description: 'Update an existing task. Supports SP short syntax in the title. Time spent is not settable here — SP derives it from the per-day worklog, so use log_time.',
       inputSchema: updateTaskSchema,
     },
-    async ({ task_id, title, notes, is_done, due_day, deadline_day, planned_at, time_estimate, time_spent, tag_ids }) => {
+    async ({ task_id, title, notes, is_done, due_day, deadline_day, planned_at, time_estimate, tag_ids }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
 
       const data: Record<string, unknown> = {};
@@ -314,7 +319,6 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (deadline_day !== undefined) data.deadlineDay = deadline_day || null;
       if (planned_at !== undefined) data.plannedAt = planned_at;
       if (time_estimate !== undefined) data.timeEstimate = time_estimate;
-      if (time_spent !== undefined) data.timeSpent = time_spent;
       // tag_ids replaces the entire tag list; use add_tag_to_task / remove_tag_from_task for incremental changes
       if (tag_ids !== undefined) data.tagIds = tag_ids;
 
@@ -432,7 +436,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
   server.registerTool(
     'bulk_update_tasks',
     {
-      description: 'Update multiple tasks in a single operation. Each item specifies a task_id and the fields to update. Uses partial-success semantics.',
+      description: 'Update multiple tasks in a single operation. Each item specifies a task_id and the fields to update. Uses partial-success semantics. Time spent is not settable here — SP derives it from the per-day worklog, so use log_time.',
       inputSchema: bulkUpdateTasksSchema,
     },
     async ({ updates }) => {
@@ -445,7 +449,6 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
           ...(u.deadline_day !== undefined && { deadlineDay: u.deadline_day || null }),
           ...(u.tag_ids !== undefined && { tagIds: u.tag_ids }),
           ...(u.time_estimate !== undefined && { timeEstimate: u.time_estimate }),
-          ...(u.time_spent !== undefined && { timeSpent: u.time_spent }),
         },
       }));
       const res = await sendCommand(dirs, 'bulkUpdateTasks', { updates: mapped });
@@ -612,22 +615,44 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       description: 'Log time spent on a task for a specific day. Adds to that day\'s tracked time by default, or overwrites it with mode "set" (pass 0m with "set" to clear a day). Time lands in the same per-day record SP\'s own timer writes, so it shows up in the worklog and rolls up to the parent task.',
       inputSchema: logTimeSchema,
     },
-    async ({ task_id, duration, date, mode }) => {
+    async ({ task_id, duration, date, entries, mode }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
 
-      const durationMs = parseDuration(duration ?? '');
-      if (durationMs === null) {
-        return errorResult(`Invalid duration "${duration}" — use SP short syntax, e.g. 2h, 45m, 1h30m or 90s`);
+      if (entries !== undefined && duration !== undefined) {
+        return errorResult('Pass either duration (one day) or entries (several days), not both');
+      }
+      if (entries === undefined && duration === undefined) {
+        return errorResult('Pass duration to log one day, or entries to log several');
       }
 
-      const day = date ?? localDateStr();
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
-        return errorResult(`Invalid date "${day}" — expected ISO format YYYY-MM-DD`);
+      // The single-day form is just a one-entry list — one validation path and one
+      // wire shape, so the two forms cannot drift apart.
+      const requested = entries ?? [{ date: date ?? localDateStr(), duration: duration as string }];
+      if (requested.length === 0) return errorResult('entries must contain at least one day');
+
+      // Validate everything before sending: a partially-applied multi-day write
+      // would leave the worklog in a state the caller never asked for.
+      const seen = new Set<string>();
+      const normalised: { date: string; durationMs: number }[] = [];
+      for (const entry of requested) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.date)) {
+          return errorResult(`Invalid date "${entry.date}" — expected ISO format YYYY-MM-DD`);
+        }
+        if (seen.has(entry.date)) {
+          return errorResult(`Duplicate date "${entry.date}" in entries — one entry per day`);
+        }
+        seen.add(entry.date);
+
+        const durationMs = parseDuration(entry.duration ?? '');
+        if (durationMs === null) {
+          return errorResult(`Invalid duration "${entry.duration}" for ${entry.date} — use SP short syntax, e.g. 2h, 45m, 1h30m or 90s`);
+        }
+        normalised.push({ date: entry.date, durationMs });
       }
 
-      const res = await sendCommand(dirs, 'logTime', {
+      const res = await sendCommand(dirs, 'logTimeEntries', {
         taskId: task_id,
-        data: { date: day, durationMs, mode: mode ?? 'add' },
+        data: { entries: normalised, mode: mode ?? 'add' },
       });
       if (!res.success) return errorResult(res.error ?? 'Failed to log time');
       return okResult(res.result);
