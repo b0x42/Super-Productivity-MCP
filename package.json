@@ -1,7 +1,7 @@
 {
   "name": "super-productivity-mcp",
-  "version": "1.6.0",
-  "description": "MCP server for Super Productivity — manage tasks, projects, and tags via AI assistants",
+  "version": "1.7.0",
+  "description": "MCP server for Super Productivity \u2014 manage tasks, projects, and tags via AI assistants",
   "main": "dist/index.js",
   "bin": {
     "super-productivity-mcp": "dist/index.js"
@@ -9,13 +9,14 @@
   "type": "module",
   "scripts": {
     "build": "tsup && npm run build:plugin",
+    "build:server": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "prepublishOnly": "npm run build",
-    "build:plugin": "cd plugin && zip -r ../dist/plugin.zip manifest.json plugin.js index.html icon.svg"
+    "build:plugin": "node scripts/build-plugin.mjs"
   },
   "files": [
     "dist",

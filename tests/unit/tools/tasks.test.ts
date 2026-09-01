@@ -12,6 +12,7 @@ import {
   updateTaskSchema,
   createTaskWithSubtasksSchema,
   bulkUpdateTasksSchema,
+  logTimeSchema,
   registerTaskTools,
 } from '../../../src/tools/tasks.js';
 import type { ResolvedDirs } from '../../../src/ipc/directories.js';
@@ -786,5 +787,193 @@ describe('task tool logic', () => {
       expect(res.success).toBe(false);
       expect(res.error).toBe('Failed to get repeat configs');
     });
+  });
+});
+
+// log_time drives the real registered handler (like the deadline_day tests above),
+// since the point is the mapping from short syntax + defaults onto the logTime command.
+describe('log_time', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  type ToolResult = { isError?: boolean; content: { text: string }[] };
+  const callLogTime = (args: Record<string, unknown>) =>
+    toolHandlers.get('log_time')!(args) as Promise<ToolResult>;
+  const errorOf = (res: ToolResult) => JSON.parse(res.content[0].text).error as string;
+
+  it('sends logTime with the parsed duration, defaulting to today and add mode', async () => {
+    mockSend.mockResolvedValueOnce(mockResponse({ timeSpentOnDay: {}, timeSpent: 0 }));
+    await callLogTime({ task_id: 'task-1', duration: '1h30m' });
+    expect(mockSend).toHaveBeenCalledWith(dirs, 'logTimeEntries', {
+      taskId: 'task-1',
+      data: { entries: [{ date: localDateStr(), durationMs: 5_400_000 }], mode: 'add' },
+    });
+  });
+
+  it('passes an explicit date and set mode through', async () => {
+    mockSend.mockResolvedValueOnce(mockResponse({ timeSpentOnDay: {}, timeSpent: 0 }));
+    await callLogTime({ task_id: 'task-1', duration: '45m', date: '2026-08-31', mode: 'set' });
+    expect(mockSend).toHaveBeenCalledWith(dirs, 'logTimeEntries', {
+      taskId: 'task-1',
+      data: { entries: [{ date: '2026-08-31', durationMs: 2_700_000 }], mode: 'set' },
+    });
+  });
+
+  it('rejects an unparseable duration without sending a command', async () => {
+    const res = await callLogTime({ task_id: 'task-1', duration: 'about an hour' });
+    expect(res.isError).toBe(true);
+    expect(errorOf(res)).toMatch(/duration/i);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed date without sending a command', async () => {
+    const res = await callLogTime({ task_id: 'task-1', duration: '1h', date: '31-08-2026' });
+    expect(res.isError).toBe(true);
+    expect(errorOf(res)).toMatch(/date/i);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects a blank task_id without sending a command', async () => {
+    const res = await callLogTime({ task_id: '  ', duration: '1h' });
+    expect(res.isError).toBe(true);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the plugin error when the task does not exist', async () => {
+    mockSend.mockResolvedValueOnce({ success: false, error: 'Task not found: nope', timestamp: Date.now() });
+    const res = await callLogTime({ task_id: 'nope', duration: '1h' });
+    expect(res.isError).toBe(true);
+    expect(errorOf(res)).toBe('Task not found: nope');
+  });
+
+  it('returns the updated per-day map from the plugin', async () => {
+    mockSend.mockResolvedValueOnce(mockResponse({
+      taskId: 'task-1',
+      date: '2026-08-31',
+      timeSpentOnDay: { '2026-08-31': 5_400_000 },
+      timeSpent: 5_400_000,
+    }));
+    const res = await callLogTime({ task_id: 'task-1', duration: '1h30m', date: '2026-08-31' });
+    expect(res.isError).toBeUndefined();
+    expect(JSON.parse(res.content[0].text).timeSpentOnDay).toEqual({ '2026-08-31': 5_400_000 });
+  });
+
+  it('rejects an unknown parameter (strict schema)', () => {
+    expect(logTimeSchema.safeParse({ task_id: 'task-1', duration: '1h', durration: '2h' }).success).toBe(false);
+  });
+});
+
+// 007: the per-day map is the only writable representation of time spent.
+describe('log_time multi-day', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  type ToolResult = { isError?: boolean; content: { text: string }[] };
+  const callLogTime = (args: Record<string, unknown>) =>
+    toolHandlers.get('log_time')!(args) as Promise<ToolResult>;
+  const errorOf = (res: ToolResult) => JSON.parse(res.content[0].text).error as string;
+
+  it('normalises a single-day call into one entry', async () => {
+    mockSend.mockResolvedValueOnce(mockResponse({}));
+    await callLogTime({ task_id: 't1', duration: '1h30m', date: '2026-08-31' });
+    expect(mockSend).toHaveBeenCalledWith(dirs, 'logTimeEntries', {
+      taskId: 't1',
+      data: { entries: [{ date: '2026-08-31', durationMs: 5_400_000 }], mode: 'add' },
+    });
+  });
+
+  it('sends every entry of a multi-day call', async () => {
+    mockSend.mockResolvedValueOnce(mockResponse({}));
+    await callLogTime({
+      task_id: 't1',
+      entries: [{ date: '2026-08-30', duration: '2h' }, { date: '2026-08-31', duration: '45m' }],
+    });
+    expect(mockSend).toHaveBeenCalledWith(dirs, 'logTimeEntries', {
+      taskId: 't1',
+      data: {
+        entries: [
+          { date: '2026-08-30', durationMs: 7_200_000 },
+          { date: '2026-08-31', durationMs: 2_700_000 },
+        ],
+        mode: 'add',
+      },
+    });
+  });
+
+  it('applies mode to every entry', async () => {
+    mockSend.mockResolvedValueOnce(mockResponse({}));
+    await callLogTime({ task_id: 't1', mode: 'set', entries: [{ date: '2026-08-30', duration: '2h' }] });
+    expect(mockSend.mock.calls[0][2]).toMatchObject({ data: expect.objectContaining({ mode: 'set' }) });
+  });
+
+  it('rejects duration and entries together', async () => {
+    const res = await callLogTime({ task_id: 't1', duration: '1h', entries: [{ date: '2026-08-30', duration: '2h' }] });
+    expect(res.isError).toBe(true);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects a call with neither duration nor entries', async () => {
+    const res = await callLogTime({ task_id: 't1' });
+    expect(res.isError).toBe(true);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty entries array', async () => {
+    const res = await callLogTime({ task_id: 't1', entries: [] });
+    expect(res.isError).toBe(true);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate dates rather than letting one silently win', async () => {
+    const res = await callLogTime({
+      task_id: 't1',
+      entries: [{ date: '2026-08-30', duration: '2h' }, { date: '2026-08-30', duration: '1h' }],
+    });
+    expect(res.isError).toBe(true);
+    expect(errorOf(res)).toMatch(/duplicate/i);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('fails the whole call when one entry has a bad duration, writing nothing', async () => {
+    const res = await callLogTime({
+      task_id: 't1',
+      entries: [{ date: '2026-08-30', duration: '2h' }, { date: '2026-08-31', duration: 'ages' }],
+    });
+    expect(res.isError).toBe(true);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('fails the whole call when one entry has a bad date', async () => {
+    const res = await callLogTime({
+      task_id: 't1',
+      entries: [{ date: '2026-08-30', duration: '2h' }, { date: '30-08-2026', duration: '1h' }],
+    });
+    expect(res.isError).toBe(true);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('caps entries at 100 like the other bulk tools', () => {
+    const many = Array.from({ length: 101 }, (_, i) => ({ date: `2026-01-${i}`, duration: '1h' }));
+    expect(logTimeSchema.safeParse({ task_id: 't1', entries: many }).success).toBe(false);
+  });
+
+  it('requires a date on every entry — a list has no "default to today"', () => {
+    expect(logTimeSchema.safeParse({ task_id: 't1', entries: [{ duration: '1h' }] }).success).toBe(false);
+  });
+});
+
+describe('time_spent removal (007)', () => {
+  it('update_task no longer accepts time_spent', () => {
+    expect(updateTaskSchema.safeParse({ task_id: 't1', time_spent: 5000 }).success).toBe(false);
+  });
+
+  it('update_task still accepts time_estimate — SP stores that field directly', () => {
+    expect(updateTaskSchema.safeParse({ task_id: 't1', time_estimate: 5000 }).success).toBe(true);
+  });
+
+  it('bulk_update_tasks no longer accepts time_spent', () => {
+    expect(bulkUpdateTasksSchema.safeParse({ updates: [{ task_id: 't1', time_spent: 5000 }] }).success).toBe(false);
+  });
+
+  it('bulk_update_tasks still accepts time_estimate', () => {
+    expect(bulkUpdateTasksSchema.safeParse({ updates: [{ task_id: 't1', time_estimate: 5000 }] }).success).toBe(true);
   });
 });

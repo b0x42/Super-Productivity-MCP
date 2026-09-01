@@ -138,11 +138,12 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | `create_task` | Create a task (supports SP short syntax) |
 | `create_task_with_subtasks` | Create a parent task + subtasks in one operation |
 | `get_tasks` | List tasks — filter by project, tag, done, archived, search (title+notes), `parents_only`, `overdue`, `unscheduled`, `planned_for_today`, `recurring_only`, `fields` |
-| `update_task` | Update title, notes, done state, due date, deadline, `planned_at`, time, tags |
+| `update_task` | Update title, notes, done state, due date, deadline, `planned_at`, time estimate, tags |
 | `complete_task` | Mark a task as complete |
-| `delete_task` | Permanently delete a task (parent deletes subtasks too) |
+| `delete_task` | Permanently delete a task (parent deletes subtasks too). Archived tasks can't be deleted — SP's plugin API is read-only for the archive |
 | `start_task` | Start the time tracker on a task |
 | `stop_task` | Stop the currently running time tracker |
+| `log_time` | Log time spent on a task — one day, or several at once via `entries` for backfill. Adds to each day's tracked time, or overwrites with `mode: "set"` |
 | `get_current_task` | Get the currently tracked task (null if none) |
 | `plan_tasks_for_today` | Batch plan/unplan tasks for today ⚠️ [limited](#known-limitations) |
 | `bulk_complete_tasks` | Mark multiple tasks complete in one operation |
@@ -170,6 +171,56 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | `debug_directories` | Show resolved data directory paths |
 
 Habit tools (`create_habit`, `get_habits`, `update_habit`, `check_habit`, `set_habit_value`, `delete_habit`) require a Super Productivity build newer than the `14.0.0` minimum above — on older builds they return a clear "requires a newer version" error instead of failing silently.
+
+## Time Tracking
+
+Super Productivity stores time spent as a **per-day worklog** (`timeSpentOnDay`,
+a map of `YYYY-MM-DD` to milliseconds). The task's total, `timeSpent`, is always
+derived from it — SP recomputes the total on every write, and a parent task's
+time is the aggregate of its subtasks.
+
+This server follows that model:
+
+- **Reading** — both fields are available on `get_tasks`, including via field
+  selection: `fields: ["timeSpent", "timeSpentOnDay"]`. They also appear in the
+  `sp://tasks` resource summary. `get_worklog` aggregates the map across tasks
+  by day, project, and tag.
+- **Writing** — through `log_time` only, which writes the day map and recomputes
+  the total the way SP does. `update_task` and `bulk_update_tasks` deliberately
+  cannot set `timeSpent`: writing a total that no worklog accounts for produces a
+  task SP's own model cannot represent, and SP silently discards it at the next
+  write to that task's time.
+
+```jsonc
+// one day
+{ "task_id": "abc", "duration": "1h30m" }               // defaults to today
+// several days, e.g. backfilling a week
+{ "task_id": "abc", "entries": [
+    { "date": "2026-08-30", "duration": "2h" },
+    { "date": "2026-08-31", "duration": "45m" }
+] }
+```
+
+If a task's stored total disagreed with its worklog before the write — which
+happens with data imported from other tools — `log_time` recomputes from the
+worklog and reports the old value as `previousTimeSpent`, so the correction is
+visible rather than silent.
+
+## Tool Call Timeline
+
+The plugin adds a **MCP Bridge** pane to Super Productivity's menu listing what
+the assistant has done — one row per tool call with the time, tool name,
+duration, and whether it succeeded. Click a row to see the arguments it was
+called with and the result it returned; failures show the error message.
+
+The server writes each call to `tool-calls.jsonl` in the same data directory it
+uses for IPC (`debug_directories` shows the path). The log keeps the most recent
+500 calls and is created mode 0600. Individual arguments or results over 8KB are
+replaced by a marker recording how many bytes were elided, so a `get_tasks` over
+a large task list doesn't copy your database into a flat file.
+
+Recording is best-effort: if the log can't be written, the tool call still
+succeeds and returns normally.
 
 ## SP Short Syntax
 
