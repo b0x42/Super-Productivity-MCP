@@ -140,7 +140,7 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | `get_tasks` | List tasks — filter by project, tag, done, archived, search (title+notes), `parents_only`, `overdue`, `unscheduled`, `planned_for_today`, `recurring_only`, `fields` |
 | `update_task` | Update title, notes, done state, due date, deadline, `planned_at`, time estimate, tags |
 | `complete_task` | Mark a task as complete |
-| `delete_task` | Permanently delete a task (parent deletes subtasks too) |
+| `delete_task` | Permanently delete a task (parent deletes subtasks too). Archived tasks can't be deleted — SP's plugin API is read-only for the archive |
 | `start_task` | Start the time tracker on a task |
 | `stop_task` | Stop the currently running time tracker |
 | `log_time` | Log time spent on a task — one day, or several at once via `entries` for backfill. Adds to each day's tracked time, or overwrites with `mode: "set"` |

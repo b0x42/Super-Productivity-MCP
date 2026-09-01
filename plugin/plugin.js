@@ -104,6 +104,23 @@ function missingHabitApiError() {
   return missing.length ? 'Habit management requires a newer version of Super Productivity.' : null;
 }
 
+// PluginAPI exposes getArchivedTasks() for reading but nothing that removes from
+// the archive, so an archived task can be seen and never deleted. Reporting it as
+// "not found" is misleading for a task get_tasks will happily return — name the
+// real reason and say where deletion is possible. Probed defensively: older SP
+// builds may not expose the archive at all, and a failure here must not turn a
+// clear error into a thrown one.
+async function archivedTaskError(taskId) {
+  if (typeof PluginAPI.getArchivedTasks !== 'function') return null;
+  try {
+    const archived = await PluginAPI.getArchivedTasks();
+    if (!archived.some(t => t.id === taskId)) return null;
+    return `Task ${taskId} is archived. Archived tasks cannot be deleted through the plugin API — remove it from the archive in Super Productivity.`;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function setupDirectories() {
   const result = await PluginAPI.executeNodeScript({
     script: `
@@ -553,7 +570,12 @@ async function executeCommand(command) {
         const allTasksForDelete = await PluginAPI.getTasks();
         const taskToDelete = allTasksForDelete.find(t => t.id === command.taskId);
         if (!taskToDelete) {
-          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+          const archivedError = await archivedTaskError(command.taskId);
+          return {
+            success: false,
+            error: archivedError || `Task not found: ${command.taskId}`,
+            timestamp: Date.now(),
+          };
         }
         await PluginAPI.deleteTask(command.taskId);
         result = null;
