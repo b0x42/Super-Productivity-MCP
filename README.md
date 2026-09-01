@@ -143,6 +143,7 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | `delete_task` | Permanently delete a task (parent deletes subtasks too) |
 | `start_task` | Start the time tracker on a task |
 | `stop_task` | Stop the currently running time tracker |
+| `log_time` | Log time spent on a task for a given day — adds to that day's tracked time, or overwrites it with `mode: "set"` |
 | `get_current_task` | Get the currently tracked task (null if none) |
 | `plan_tasks_for_today` | Batch plan/unplan tasks for today ⚠️ [limited](#known-limitations) |
 | `bulk_complete_tasks` | Mark multiple tasks complete in one operation |

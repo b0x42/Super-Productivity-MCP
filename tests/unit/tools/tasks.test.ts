@@ -12,6 +12,7 @@ import {
   updateTaskSchema,
   createTaskWithSubtasksSchema,
   bulkUpdateTasksSchema,
+  logTimeSchema,
   registerTaskTools,
 } from '../../../src/tools/tasks.js';
 import type { ResolvedDirs } from '../../../src/ipc/directories.js';
@@ -786,5 +787,77 @@ describe('task tool logic', () => {
       expect(res.success).toBe(false);
       expect(res.error).toBe('Failed to get repeat configs');
     });
+  });
+});
+
+// log_time drives the real registered handler (like the deadline_day tests above),
+// since the point is the mapping from short syntax + defaults onto the logTime command.
+describe('log_time', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  type ToolResult = { isError?: boolean; content: { text: string }[] };
+  const callLogTime = (args: Record<string, unknown>) =>
+    toolHandlers.get('log_time')!(args) as Promise<ToolResult>;
+  const errorOf = (res: ToolResult) => JSON.parse(res.content[0].text).error as string;
+
+  it('sends logTime with the parsed duration, defaulting to today and add mode', async () => {
+    mockSend.mockResolvedValueOnce(mockResponse({ timeSpentOnDay: {}, timeSpent: 0 }));
+    await callLogTime({ task_id: 'task-1', duration: '1h30m' });
+    expect(mockSend).toHaveBeenCalledWith(dirs, 'logTime', {
+      taskId: 'task-1',
+      data: { date: localDateStr(), durationMs: 5_400_000, mode: 'add' },
+    });
+  });
+
+  it('passes an explicit date and set mode through', async () => {
+    mockSend.mockResolvedValueOnce(mockResponse({ timeSpentOnDay: {}, timeSpent: 0 }));
+    await callLogTime({ task_id: 'task-1', duration: '45m', date: '2026-08-31', mode: 'set' });
+    expect(mockSend).toHaveBeenCalledWith(dirs, 'logTime', {
+      taskId: 'task-1',
+      data: { date: '2026-08-31', durationMs: 2_700_000, mode: 'set' },
+    });
+  });
+
+  it('rejects an unparseable duration without sending a command', async () => {
+    const res = await callLogTime({ task_id: 'task-1', duration: 'about an hour' });
+    expect(res.isError).toBe(true);
+    expect(errorOf(res)).toMatch(/duration/i);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed date without sending a command', async () => {
+    const res = await callLogTime({ task_id: 'task-1', duration: '1h', date: '31-08-2026' });
+    expect(res.isError).toBe(true);
+    expect(errorOf(res)).toMatch(/date/i);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects a blank task_id without sending a command', async () => {
+    const res = await callLogTime({ task_id: '  ', duration: '1h' });
+    expect(res.isError).toBe(true);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the plugin error when the task does not exist', async () => {
+    mockSend.mockResolvedValueOnce({ success: false, error: 'Task not found: nope', timestamp: Date.now() });
+    const res = await callLogTime({ task_id: 'nope', duration: '1h' });
+    expect(res.isError).toBe(true);
+    expect(errorOf(res)).toBe('Task not found: nope');
+  });
+
+  it('returns the updated per-day map from the plugin', async () => {
+    mockSend.mockResolvedValueOnce(mockResponse({
+      taskId: 'task-1',
+      date: '2026-08-31',
+      timeSpentOnDay: { '2026-08-31': 5_400_000 },
+      timeSpent: 5_400_000,
+    }));
+    const res = await callLogTime({ task_id: 'task-1', duration: '1h30m', date: '2026-08-31' });
+    expect(res.isError).toBeUndefined();
+    expect(JSON.parse(res.content[0].text).timeSpentOnDay).toEqual({ '2026-08-31': 5_400_000 });
+  });
+
+  it('rejects an unknown parameter (strict schema)', () => {
+    expect(logTimeSchema.safeParse({ task_id: 'task-1', duration: '1h', durration: '2h' }).success).toBe(false);
   });
 });
