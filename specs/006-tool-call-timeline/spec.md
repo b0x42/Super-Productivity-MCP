@@ -114,7 +114,8 @@ user's entire task list. The log must stay bounded without the user managing it.
 - **FR-015**: The pane MUST refresh on an interval matching the plugin's existing 2000 ms cadence
 - **FR-016**: Unparseable lines MUST be skipped without failing the render
 - **FR-017**: A missing or empty log MUST produce an empty state
-- **FR-018**: The pane MUST use no external dependencies and require no build step, since `plugin.zip` is assembled by `zip` alone
+- **FR-018**: The pane MUST use no external dependencies. Its JavaScript MUST be inlined into `index.html` at build time: SP serves only `index.html` to the iframe (via `srcdoc`) and does not serve arbitrary extra files from the ZIP, so a `<script src="dashboard.js">` tag fetches nothing and fails silently
+- **FR-018a**: The pane MUST NOT depend on `DOMContentLoaded` still being pending when its script runs — under `srcdoc` that is undocumented, and a missed event leaves the pane permanently blank. It MUST branch on `document.readyState`
 - **FR-019**: The pane MUST honour `prefers-color-scheme` so it stays legible against SP's dark theme
 
 ### Key Entities
@@ -137,6 +138,7 @@ user's entire task list. The log must stay bounded without the user managing it.
 
 - **Iframe context — resolved from SP's plugin development guide.** Iframe plugins receive a filtered `window.PluginAPI` injected into `index.html`, and `executeNodeScript` is proxied through the host bridge for iframe plugins whenever the desktop app has granted `nodeExecution` — which this plugin already requests. The pane can therefore read the log directly and needs no `postMessage` bridge. What remains host-only is callback-heavy registration (`registerHeaderButton`, `registerMenuEntry`, `registerSidePanelButton`, `registerShortcut`, `registerConfigHandler`); this feature registers none of them, so `plugin.js` keeps its current role. Implementation should still confirm the proxy responds on first run — one `executeNodeScript` call from the iframe before the UI is built on top of it — since this is documented behaviour rather than something observed in this repo.
 - The stub iframe has never been reachable: SP requires the `showIndexHtmlAsView` permission to display plugin UI, and the manifest does not declare it (FR-011a). Enabling the pane means adding the permission, not just flipping `isSkipMenuEntry`.
+- The original assumption that `plugin.zip` needs no build step was wrong, and cost a debugging cycle: the pane shipped with an external `<script src>` that SP never served, so it rendered its header and nothing else. `scripts/build-plugin.mjs` now inlines `plugin/dashboard.js` into `index.html` at build time. `dashboard.js` remains the source of truth and is what the unit tests import.
 - Both sides already resolve the same base directory (`src/ipc/directories.ts` and the plugin's own probe), so the log needs no new path logic.
 - No protocol version bump: the log is written and read outside the command/response protocol.
 - Concurrent servers are tolerated, not coordinated — no lock file. Last-writer-wins on prune is acceptable for a log.

@@ -220,11 +220,20 @@ async function refresh(root, status, state) {
 
 // Guarded so importing this file in the test runner doesn't try to boot a UI.
 if (typeof document !== 'undefined' && typeof window !== 'undefined') {
-  window.addEventListener('DOMContentLoaded', function () {
+  var start = function () {
     var root = document.getElementById('entries');
     var status = document.getElementById('status');
     var state = { lastText: null, expanded: new Set() };
     refresh(root, status, state);
     setInterval(function () { refresh(root, status, state); }, REFRESH_MS);
-  });
+  };
+  // SP injects index.html via srcdoc, and whether DOMContentLoaded is still
+  // ahead of this script under srcdoc isn't documented. Waiting for an event
+  // that already fired would leave the pane blank forever, so branch on
+  // readyState rather than trusting the event.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
+  }
 }
