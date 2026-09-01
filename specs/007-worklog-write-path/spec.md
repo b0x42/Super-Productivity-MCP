@@ -148,7 +148,7 @@ validation error naming `log_time`.
 
 ## Assumptions
 
-- This is a breaking change to `update_task` and `bulk_update_tasks`, warranting a minor version bump. Because the schemas are `.strict()`, a caller passing `time_spent` gets an immediate validation error rather than a silent behaviour change — a loud failure with a message pointing at `log_time`.
+- This is a breaking change to `update_task` and `bulk_update_tasks`, but ships without a version bump. Because the schemas are `.strict()`, a caller passing `time_spent` gets an immediate validation error rather than a silent behaviour change — a loud failure with a message pointing at `log_time` — so the break announces itself without needing a version to signal it.
 - Divergent totals are not preserved. SP discards them at the next write to the task's time, so preserving one would manufacture a state SP's model forbids and then lose it anyway. FR-012 makes the correction visible instead.
 - `applyDayTime` in `plugin/plugin.js` generalizes from one day to many: apply each day, recompute the total once, and roll the per-day deltas to the parent in a single update. It stays a private plugin helper, not an MCP action.
 - No protocol version bump — `logTime` gains fields in its `data` payload, which is additive.

@@ -66,20 +66,26 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = { parseAtDateSyntax, executeCommand, PLUGIN_VERSION };
 }
 
-// Set one day's entry in a timeSpentOnDay map and recompute the derived total.
+// Set one or more days in a timeSpentOnDay map and recompute the derived total.
 // SP stores timeSpent as the sum of the per-day map, and PluginAPI exposes no
 // addTimeSpent action to keep them in sync — writing timeSpentOnDay through the
 // generic updateTask means we own that recomputation. A day that lands on zero is
 // removed rather than kept, so get_worklog never reports a day with no work on it.
-function applyDayTime(timeSpentOnDay, day, ms) {
+// The total is summed once at the end, not per day.
+function applyDayTimes(timeSpentOnDay, changes) {
   const map = Object.assign({}, timeSpentOnDay || {});
-  if (ms > 0) {
-    map[day] = ms;
-  } else {
-    delete map[day];
+  for (const change of changes) {
+    if (change.ms > 0) {
+      map[change.date] = change.ms;
+    } else {
+      delete map[change.date];
+    }
   }
-  const timeSpent = Object.keys(map).reduce((sum, key) => sum + map[key], 0);
-  return { timeSpentOnDay: map, timeSpent };
+  return { timeSpentOnDay: map, timeSpent: sumDayMap(map) };
+}
+
+function sumDayMap(map) {
+  return Object.keys(map || {}).reduce((sum, key) => sum + (map[key] || 0), 0);
 }
 
 // Local YYYY-MM-DD for "today", matching how SP's own getDbDateStr keys countOnDay
@@ -487,36 +493,60 @@ async function executeCommand(command) {
         result = null;
         break;
       }
-      case 'logTime': {
+      case 'logTime':
+      case 'logTimeEntries': {
         // PluginAPI has no addTimeSpent equivalent, and updateTask() silently no-ops on
         // an unknown id (the quirk bulkUpdateTasks and startTask guard against), so the
         // task has to be looked up before anything is written.
         const logData = command.data || {};
-        const day = logData.date;
+        // 'logTime' is the older single-day shape; normalise it so there is one code path.
+        const logEntries = logData.entries || [{ date: logData.date, durationMs: logData.durationMs }];
         const allTasksForLog = await PluginAPI.getTasks();
         const taskForLog = allTasksForLog.find(t => t.id === command.taskId);
         if (!taskForLog) {
           return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
         }
 
-        const previous = (taskForLog.timeSpentOnDay || {})[day] || 0;
-        const next = logData.mode === 'set' ? logData.durationMs : previous + logData.durationMs;
-        const updated = applyDayTime(taskForLog.timeSpentOnDay, day, next);
+        const existingDays = taskForLog.timeSpentOnDay || {};
+        // SP always derives timeSpent from this map. A task whose stored total
+        // disagrees came from outside SP's reducers; recomputing corrects it, and
+        // the old value is reported back so the correction isn't silent.
+        const sumBefore = sumDayMap(existingDays);
+
+        const dayChanges = [];
+        const parentDeltas = [];
+        for (const entry of logEntries) {
+          const previous = existingDays[entry.date] || 0;
+          const next = logData.mode === 'set' ? entry.durationMs : previous + entry.durationMs;
+          dayChanges.push({ date: entry.date, ms: next });
+          if (next !== previous) parentDeltas.push({ date: entry.date, delta: next - previous });
+        }
+
+        const updated = applyDayTimes(existingDays, dayChanges);
         await PluginAPI.updateTask(command.taskId, updated);
 
         // SP treats a parent's tracked time as the aggregate of its subtasks, so the same
-        // delta has to land on the parent — otherwise the parent and get_worklog's project
-        // totals drift apart from the subtask that actually recorded the work.
-        const delta = next - previous;
-        if (taskForLog.parentId && delta !== 0) {
+        // deltas have to land on the parent — otherwise the parent and get_worklog's
+        // project totals drift from the subtask that actually recorded the work. All the
+        // affected days go in one update rather than one write per day.
+        if (taskForLog.parentId && parentDeltas.length) {
           const parentForLog = allTasksForLog.find(t => t.id === taskForLog.parentId);
           if (parentForLog) {
-            const parentDay = Math.max(0, ((parentForLog.timeSpentOnDay || {})[day] || 0) + delta);
-            await PluginAPI.updateTask(parentForLog.id, applyDayTime(parentForLog.timeSpentOnDay, day, parentDay));
+            const parentDays = parentForLog.timeSpentOnDay || {};
+            const parentChanges = parentDeltas.map(function (d) {
+              return { date: d.date, ms: Math.max(0, (parentDays[d.date] || 0) + d.delta) };
+            });
+            await PluginAPI.updateTask(parentForLog.id, applyDayTimes(parentDays, parentChanges));
           }
         }
 
-        result = { taskId: command.taskId, date: day, timeSpentOnDay: updated.timeSpentOnDay, timeSpent: updated.timeSpent };
+        result = {
+          taskId: command.taskId,
+          dates: logEntries.map(function (e) { return e.date; }),
+          timeSpentOnDay: updated.timeSpentOnDay,
+          timeSpent: updated.timeSpent,
+        };
+        if (taskForLog.timeSpent !== sumBefore) result.previousTimeSpent = taskForLog.timeSpent;
         break;
       }
       case 'deleteTask': {

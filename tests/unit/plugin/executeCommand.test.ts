@@ -194,11 +194,115 @@ describe('executeCommand: logTime', () => {
   it('returns the updated map and total', async () => {
     tasks = [{ id: 't1', parentId: null, timeSpent: 0, timeSpentOnDay: {} }];
     const res = await logTime('t1', { date: '2026-08-31', durationMs: HOUR, mode: 'add' });
+    // The result reports every day it touched; the single-day form is a one-item list.
     expect(res.result).toEqual({
       taskId: 't1',
-      date: '2026-08-31',
+      dates: ['2026-08-31'],
       timeSpentOnDay: { '2026-08-31': HOUR },
       timeSpent: HOUR,
     });
+  });
+});
+
+// 007: multi-day logging. The caller sends durations per day, never a whole map,
+// so there is no agent-length window in which SP's timer can be clobbered.
+describe('executeCommand: logTimeEntries', () => {
+  const HOUR = 3_600_000;
+  let tasks: Record<string, unknown>[];
+
+  beforeEach(() => {
+    tasks = [];
+    globalThis.PluginAPI = {
+      addTask: vi.fn(),
+      updateTask: vi.fn().mockResolvedValue(undefined),
+      getTasks: vi.fn(async () => tasks),
+    };
+  });
+
+  const logEntries = (taskId: string, entries: unknown[], mode = 'add') =>
+    executeCommand({ action: 'logTimeEntries', taskId, data: { entries, mode } });
+
+  const patchFor = (taskId: string) =>
+    globalThis.PluginAPI.updateTask.mock.calls.find(([id]) => id === taskId)?.[1];
+
+  it('applies every day in one call', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: 0, timeSpentOnDay: {} }];
+    await logEntries('t1', [
+      { date: '2026-08-30', durationMs: HOUR * 2 },
+      { date: '2026-08-31', durationMs: HOUR },
+    ]);
+    expect(patchFor('t1')).toEqual({
+      timeSpentOnDay: { '2026-08-30': HOUR * 2, '2026-08-31': HOUR },
+      timeSpent: HOUR * 3,
+    });
+  });
+
+  it('writes the task once, not once per day', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: 0, timeSpentOnDay: {} }];
+    await logEntries('t1', [
+      { date: '2026-08-29', durationMs: HOUR },
+      { date: '2026-08-30', durationMs: HOUR },
+      { date: '2026-08-31', durationMs: HOUR },
+    ]);
+    expect(globalThis.PluginAPI.updateTask).toHaveBeenCalledTimes(1);
+  });
+
+  it('adds onto days that already have time', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: HOUR, timeSpentOnDay: { '2026-08-30': HOUR } }];
+    await logEntries('t1', [{ date: '2026-08-30', durationMs: HOUR }]);
+    expect(patchFor('t1')).toEqual({ timeSpentOnDay: { '2026-08-30': HOUR * 2 }, timeSpent: HOUR * 2 });
+  });
+
+  it('overwrites each day in set mode', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: HOUR * 3, timeSpentOnDay: { '2026-08-30': HOUR * 3 } }];
+    await logEntries('t1', [{ date: '2026-08-30', durationMs: HOUR }], 'set');
+    expect(patchFor('t1')).toEqual({ timeSpentOnDay: { '2026-08-30': HOUR }, timeSpent: HOUR });
+  });
+
+  it('rolls every affected day up to the parent in a single update', async () => {
+    tasks = [
+      { id: 'sub', parentId: 'parent', timeSpent: 0, timeSpentOnDay: {} },
+      { id: 'parent', parentId: null, timeSpent: HOUR, timeSpentOnDay: { '2026-08-30': HOUR } },
+    ];
+    await logEntries('sub', [
+      { date: '2026-08-30', durationMs: HOUR },
+      { date: '2026-08-31', durationMs: HOUR * 2 },
+    ]);
+    expect(patchFor('parent')).toEqual({
+      timeSpentOnDay: { '2026-08-30': HOUR * 2, '2026-08-31': HOUR * 2 },
+      timeSpent: HOUR * 4,
+    });
+    expect(globalThis.PluginAPI.updateTask).toHaveBeenCalledTimes(2); // task + parent
+  });
+
+  it('reports the previous total when it disagreed with the worklog', async () => {
+    // A task imported from elsewhere: a total with no day attribution. SP would
+    // discard it at the next write, so the correction is surfaced, not hidden.
+    tasks = [{ id: 't1', parentId: null, timeSpent: HOUR * 128, timeSpentOnDay: {} }];
+    const res = await logEntries('t1', [{ date: '2026-08-31', durationMs: HOUR }]);
+    expect((res.result as { previousTimeSpent?: number }).previousTimeSpent).toBe(HOUR * 128);
+    expect((res.result as { timeSpent: number }).timeSpent).toBe(HOUR);
+  });
+
+  it('omits previousTimeSpent when the total already matched the worklog', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: HOUR, timeSpentOnDay: { '2026-08-30': HOUR } }];
+    const res = await logEntries('t1', [{ date: '2026-08-31', durationMs: HOUR }]);
+    expect(res.result).not.toHaveProperty('previousTimeSpent');
+  });
+
+  it('returns every date it touched', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: 0, timeSpentOnDay: {} }];
+    const res = await logEntries('t1', [
+      { date: '2026-08-30', durationMs: HOUR },
+      { date: '2026-08-31', durationMs: HOUR },
+    ]);
+    expect((res.result as { dates: string[] }).dates).toEqual(['2026-08-30', '2026-08-31']);
+  });
+
+  it('errors on an unknown task without writing anything', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: 0, timeSpentOnDay: {} }];
+    const res = await logEntries('nope', [{ date: '2026-08-31', durationMs: HOUR }]);
+    expect(res.success).toBe(false);
+    expect(globalThis.PluginAPI.updateTask).not.toHaveBeenCalled();
   });
 });

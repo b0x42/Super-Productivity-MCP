@@ -803,18 +803,18 @@ describe('log_time', () => {
   it('sends logTime with the parsed duration, defaulting to today and add mode', async () => {
     mockSend.mockResolvedValueOnce(mockResponse({ timeSpentOnDay: {}, timeSpent: 0 }));
     await callLogTime({ task_id: 'task-1', duration: '1h30m' });
-    expect(mockSend).toHaveBeenCalledWith(dirs, 'logTime', {
+    expect(mockSend).toHaveBeenCalledWith(dirs, 'logTimeEntries', {
       taskId: 'task-1',
-      data: { date: localDateStr(), durationMs: 5_400_000, mode: 'add' },
+      data: { entries: [{ date: localDateStr(), durationMs: 5_400_000 }], mode: 'add' },
     });
   });
 
   it('passes an explicit date and set mode through', async () => {
     mockSend.mockResolvedValueOnce(mockResponse({ timeSpentOnDay: {}, timeSpent: 0 }));
     await callLogTime({ task_id: 'task-1', duration: '45m', date: '2026-08-31', mode: 'set' });
-    expect(mockSend).toHaveBeenCalledWith(dirs, 'logTime', {
+    expect(mockSend).toHaveBeenCalledWith(dirs, 'logTimeEntries', {
       taskId: 'task-1',
-      data: { date: '2026-08-31', durationMs: 2_700_000, mode: 'set' },
+      data: { entries: [{ date: '2026-08-31', durationMs: 2_700_000 }], mode: 'set' },
     });
   });
 
@@ -859,5 +859,121 @@ describe('log_time', () => {
 
   it('rejects an unknown parameter (strict schema)', () => {
     expect(logTimeSchema.safeParse({ task_id: 'task-1', duration: '1h', durration: '2h' }).success).toBe(false);
+  });
+});
+
+// 007: the per-day map is the only writable representation of time spent.
+describe('log_time multi-day', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  type ToolResult = { isError?: boolean; content: { text: string }[] };
+  const callLogTime = (args: Record<string, unknown>) =>
+    toolHandlers.get('log_time')!(args) as Promise<ToolResult>;
+  const errorOf = (res: ToolResult) => JSON.parse(res.content[0].text).error as string;
+
+  it('normalises a single-day call into one entry', async () => {
+    mockSend.mockResolvedValueOnce(mockResponse({}));
+    await callLogTime({ task_id: 't1', duration: '1h30m', date: '2026-08-31' });
+    expect(mockSend).toHaveBeenCalledWith(dirs, 'logTimeEntries', {
+      taskId: 't1',
+      data: { entries: [{ date: '2026-08-31', durationMs: 5_400_000 }], mode: 'add' },
+    });
+  });
+
+  it('sends every entry of a multi-day call', async () => {
+    mockSend.mockResolvedValueOnce(mockResponse({}));
+    await callLogTime({
+      task_id: 't1',
+      entries: [{ date: '2026-08-30', duration: '2h' }, { date: '2026-08-31', duration: '45m' }],
+    });
+    expect(mockSend).toHaveBeenCalledWith(dirs, 'logTimeEntries', {
+      taskId: 't1',
+      data: {
+        entries: [
+          { date: '2026-08-30', durationMs: 7_200_000 },
+          { date: '2026-08-31', durationMs: 2_700_000 },
+        ],
+        mode: 'add',
+      },
+    });
+  });
+
+  it('applies mode to every entry', async () => {
+    mockSend.mockResolvedValueOnce(mockResponse({}));
+    await callLogTime({ task_id: 't1', mode: 'set', entries: [{ date: '2026-08-30', duration: '2h' }] });
+    expect(mockSend.mock.calls[0][2]).toMatchObject({ data: expect.objectContaining({ mode: 'set' }) });
+  });
+
+  it('rejects duration and entries together', async () => {
+    const res = await callLogTime({ task_id: 't1', duration: '1h', entries: [{ date: '2026-08-30', duration: '2h' }] });
+    expect(res.isError).toBe(true);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects a call with neither duration nor entries', async () => {
+    const res = await callLogTime({ task_id: 't1' });
+    expect(res.isError).toBe(true);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty entries array', async () => {
+    const res = await callLogTime({ task_id: 't1', entries: [] });
+    expect(res.isError).toBe(true);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate dates rather than letting one silently win', async () => {
+    const res = await callLogTime({
+      task_id: 't1',
+      entries: [{ date: '2026-08-30', duration: '2h' }, { date: '2026-08-30', duration: '1h' }],
+    });
+    expect(res.isError).toBe(true);
+    expect(errorOf(res)).toMatch(/duplicate/i);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('fails the whole call when one entry has a bad duration, writing nothing', async () => {
+    const res = await callLogTime({
+      task_id: 't1',
+      entries: [{ date: '2026-08-30', duration: '2h' }, { date: '2026-08-31', duration: 'ages' }],
+    });
+    expect(res.isError).toBe(true);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('fails the whole call when one entry has a bad date', async () => {
+    const res = await callLogTime({
+      task_id: 't1',
+      entries: [{ date: '2026-08-30', duration: '2h' }, { date: '30-08-2026', duration: '1h' }],
+    });
+    expect(res.isError).toBe(true);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('caps entries at 100 like the other bulk tools', () => {
+    const many = Array.from({ length: 101 }, (_, i) => ({ date: `2026-01-${i}`, duration: '1h' }));
+    expect(logTimeSchema.safeParse({ task_id: 't1', entries: many }).success).toBe(false);
+  });
+
+  it('requires a date on every entry — a list has no "default to today"', () => {
+    expect(logTimeSchema.safeParse({ task_id: 't1', entries: [{ duration: '1h' }] }).success).toBe(false);
+  });
+});
+
+describe('time_spent removal (007)', () => {
+  it('update_task no longer accepts time_spent', () => {
+    expect(updateTaskSchema.safeParse({ task_id: 't1', time_spent: 5000 }).success).toBe(false);
+  });
+
+  it('update_task still accepts time_estimate — SP stores that field directly', () => {
+    expect(updateTaskSchema.safeParse({ task_id: 't1', time_estimate: 5000 }).success).toBe(true);
+  });
+
+  it('bulk_update_tasks no longer accepts time_spent', () => {
+    expect(bulkUpdateTasksSchema.safeParse({ updates: [{ task_id: 't1', time_spent: 5000 }] }).success).toBe(false);
+  });
+
+  it('bulk_update_tasks still accepts time_estimate', () => {
+    expect(bulkUpdateTasksSchema.safeParse({ updates: [{ task_id: 't1', time_estimate: 5000 }] }).success).toBe(true);
   });
 });
