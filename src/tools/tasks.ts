@@ -4,6 +4,7 @@ import type { ResolvedDirs } from '../ipc/directories.js';
 import { sendCommand } from '../ipc/command-sender.js';
 import type { TaskFilters } from '../ipc/types.js';
 import { errorResult, okResult } from './result.js';
+import { parseDuration } from './duration.js';
 
 interface TaskRecord {
   id: string;
@@ -191,6 +192,14 @@ const getWorklogShape = {
   end_date: z.string().describe('End date (ISO format, e.g. 2026-04-20)'),
 };
 export const getWorklogSchema = z.object(getWorklogShape).strict();
+
+const logTimeShape = {
+  task_id: z.string().describe('Task ID to log time against'),
+  duration: z.string().describe('Duration in SP short syntax: 2h, 45m, 1h30m, 90s'),
+  date: z.string().optional().describe('Day to log against (ISO format, e.g. 2026-08-31). Defaults to today.'),
+  mode: z.enum(['add', 'set']).optional().default('add').describe('"add" increments that day\'s tracked time; "set" overwrites it — pass 0m with "set" to clear the day'),
+};
+export const logTimeSchema = z.object(logTimeShape).strict();
 
 const getTaskRepeatCfgsShape = {};
 export const getTaskRepeatCfgsSchema = z.object(getTaskRepeatCfgsShape).strict();
@@ -593,6 +602,35 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
           ? { estimateMs: totalEstimate, actualMs: totalActual, ratio: totalActual / totalEstimate }
           : null,
       });
+    },
+  );
+
+  // log_time — writes the per-day map get_worklog reads
+  server.registerTool(
+    'log_time',
+    {
+      description: 'Log time spent on a task for a specific day. Adds to that day\'s tracked time by default, or overwrites it with mode "set" (pass 0m with "set" to clear a day). Time lands in the same per-day record SP\'s own timer writes, so it shows up in the worklog and rolls up to the parent task.',
+      inputSchema: logTimeSchema,
+    },
+    async ({ task_id, duration, date, mode }) => {
+      if (!task_id?.trim()) return errorResult('task_id is required');
+
+      const durationMs = parseDuration(duration ?? '');
+      if (durationMs === null) {
+        return errorResult(`Invalid duration "${duration}" — use SP short syntax, e.g. 2h, 45m, 1h30m or 90s`);
+      }
+
+      const day = date ?? localDateStr();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+        return errorResult(`Invalid date "${day}" — expected ISO format YYYY-MM-DD`);
+      }
+
+      const res = await sendCommand(dirs, 'logTime', {
+        taskId: task_id,
+        data: { date: day, durationMs, mode: mode ?? 'add' },
+      });
+      if (!res.success) return errorResult(res.error ?? 'Failed to log time');
+      return okResult(res.result);
     },
   );
 

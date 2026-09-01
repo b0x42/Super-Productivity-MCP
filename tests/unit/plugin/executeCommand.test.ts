@@ -78,3 +78,127 @@ describe('executeCommand: bulkUpdateTasks partial-success with invalid task_id',
     expect(res.result.results).toEqual([{ id: 't1', success: false, error: 'boom' }]);
   });
 });
+
+// logTime writes the per-day map itself: PluginAPI has no addTimeSpent, only the
+// generic updateTask, so the plugin owns recomputing timeSpent and rolling the
+// delta up to the parent — the two things SP's own addTimeSpent action does.
+describe('executeCommand: logTime', () => {
+  const HOUR = 3_600_000;
+  let tasks: Record<string, unknown>[];
+
+  beforeEach(() => {
+    tasks = [];
+    globalThis.PluginAPI = {
+      addTask: vi.fn(),
+      updateTask: vi.fn().mockResolvedValue(undefined),
+      getTasks: vi.fn(async () => tasks),
+    };
+  });
+
+  const logTime = (taskId: string, data: Record<string, unknown>) =>
+    executeCommand({ action: 'logTime', taskId, data });
+
+  const patchFor = (taskId: string) =>
+    globalThis.PluginAPI.updateTask.mock.calls.find(([id]) => id === taskId)?.[1];
+
+  it("adds to an existing day's tracked time", async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: HOUR, timeSpentOnDay: { '2026-08-31': HOUR } }];
+    const res = await logTime('t1', { date: '2026-08-31', durationMs: HOUR / 2, mode: 'add' });
+    expect(res.success).toBe(true);
+    expect(patchFor('t1')).toEqual({
+      timeSpentOnDay: { '2026-08-31': HOUR * 1.5 },
+      timeSpent: HOUR * 1.5,
+    });
+  });
+
+  it('creates the day entry when none exists yet', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: HOUR, timeSpentOnDay: { '2026-08-30': HOUR } }];
+    await logTime('t1', { date: '2026-08-31', durationMs: HOUR, mode: 'add' });
+    expect(patchFor('t1')).toEqual({
+      timeSpentOnDay: { '2026-08-30': HOUR, '2026-08-31': HOUR },
+      timeSpent: HOUR * 2,
+    });
+  });
+
+  it('handles a task that has never been tracked', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: 0 }];
+    await logTime('t1', { date: '2026-08-31', durationMs: HOUR, mode: 'add' });
+    expect(patchFor('t1')).toEqual({ timeSpentOnDay: { '2026-08-31': HOUR }, timeSpent: HOUR });
+  });
+
+  it("overwrites the day's value in set mode", async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: HOUR * 3, timeSpentOnDay: { '2026-08-30': HOUR * 2, '2026-08-31': HOUR } }];
+    await logTime('t1', { date: '2026-08-31', durationMs: HOUR / 2, mode: 'set' });
+    expect(patchFor('t1')).toEqual({
+      timeSpentOnDay: { '2026-08-30': HOUR * 2, '2026-08-31': HOUR / 2 },
+      timeSpent: HOUR * 2.5,
+    });
+  });
+
+  it('removes the day entry when set to zero', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: HOUR * 3, timeSpentOnDay: { '2026-08-30': HOUR * 2, '2026-08-31': HOUR } }];
+    await logTime('t1', { date: '2026-08-31', durationMs: 0, mode: 'set' });
+    expect(patchFor('t1')).toEqual({
+      timeSpentOnDay: { '2026-08-30': HOUR * 2 },
+      timeSpent: HOUR * 2,
+    });
+  });
+
+  it('rolls the added time up to the parent task', async () => {
+    tasks = [
+      { id: 'sub', parentId: 'parent', timeSpent: 0, timeSpentOnDay: {} },
+      { id: 'parent', parentId: null, timeSpent: HOUR, timeSpentOnDay: { '2026-08-31': HOUR } },
+    ];
+    await logTime('sub', { date: '2026-08-31', durationMs: HOUR, mode: 'add' });
+    expect(patchFor('parent')).toEqual({
+      timeSpentOnDay: { '2026-08-31': HOUR * 2 },
+      timeSpent: HOUR * 2,
+    });
+  });
+
+  it('rolls a set-mode reduction down on the parent', async () => {
+    tasks = [
+      { id: 'sub', parentId: 'parent', timeSpent: HOUR * 2, timeSpentOnDay: { '2026-08-31': HOUR * 2 } },
+      { id: 'parent', parentId: null, timeSpent: HOUR * 3, timeSpentOnDay: { '2026-08-31': HOUR * 3 } },
+    ];
+    await logTime('sub', { date: '2026-08-31', durationMs: HOUR, mode: 'set' });
+    expect(patchFor('parent')).toEqual({
+      timeSpentOnDay: { '2026-08-31': HOUR * 2 },
+      timeSpent: HOUR * 2,
+    });
+  });
+
+  it('never drives the parent below zero', async () => {
+    tasks = [
+      { id: 'sub', parentId: 'parent', timeSpent: HOUR * 2, timeSpentOnDay: { '2026-08-31': HOUR * 2 } },
+      { id: 'parent', parentId: null, timeSpent: HOUR, timeSpentOnDay: { '2026-08-31': HOUR } },
+    ];
+    await logTime('sub', { date: '2026-08-31', durationMs: 0, mode: 'set' });
+    expect(patchFor('parent')).toEqual({ timeSpentOnDay: {}, timeSpent: 0 });
+  });
+
+  it('leaves the parent alone for a top-level task', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: 0, timeSpentOnDay: {} }];
+    await logTime('t1', { date: '2026-08-31', durationMs: HOUR, mode: 'add' });
+    expect(globalThis.PluginAPI.updateTask).toHaveBeenCalledTimes(1);
+  });
+
+  it('errors on an unknown task instead of silently no-opping', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: 0, timeSpentOnDay: {} }];
+    const res = await logTime('nope', { date: '2026-08-31', durationMs: HOUR, mode: 'add' });
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('nope');
+    expect(globalThis.PluginAPI.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('returns the updated map and total', async () => {
+    tasks = [{ id: 't1', parentId: null, timeSpent: 0, timeSpentOnDay: {} }];
+    const res = await logTime('t1', { date: '2026-08-31', durationMs: HOUR, mode: 'add' });
+    expect(res.result).toEqual({
+      taskId: 't1',
+      date: '2026-08-31',
+      timeSpentOnDay: { '2026-08-31': HOUR },
+      timeSpent: HOUR,
+    });
+  });
+});
