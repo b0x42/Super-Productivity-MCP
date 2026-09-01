@@ -9,6 +9,7 @@
   "type": "module",
   "scripts": {
     "build": "tsup && npm run build:plugin",
+    "build:server": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
