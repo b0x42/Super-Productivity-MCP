@@ -6,13 +6,19 @@ import type { McpConfig } from './types.js';
 const APP_NAME = 'super-productivity-mcp';
 const TMP_ROOT = '/tmp';
 
-export function getCandidatePaths(): string[] {
-  const home = homedir();
-  switch (platform()) {
+export function getCandidatePaths(
+  platformName: NodeJS.Platform = platform(),
+  home = homedir(),
+): string[] {
+  switch (platformName) {
     case 'darwin':
+      // Native macOS builds use ~/Library/Application Support. The container
+      // path is retained as a fallback for Mac App Store installations. The
+      // native path must come first so a stale Store container cannot shadow a
+      // working native installation.
       return [
-        join(home, 'Library', 'Containers', 'com.super-productivity.app', 'Data', 'Library', 'Application Support', APP_NAME),
         join(home, 'Library', 'Application Support', APP_NAME),
+        join(home, 'Library', 'Containers', 'com.super-productivity.app', 'Data', 'Library', 'Application Support', APP_NAME),
       ];
     case 'win32':
       return [join(process.env.APPDATA ?? join(home, 'AppData', 'Roaming'), APP_NAME)];
@@ -51,40 +57,47 @@ function isTmpDataDir(dir: string): boolean {
   return dir === TMP_ROOT || dir.startsWith(`${TMP_ROOT}/`);
 }
 
-export function resolveDataDir(): string {
+function publishConfig(dataDir: string, candidatePaths: string[]): void {
+  // The plugin cannot inherit the MCP client's environment. Publish the
+  // selected directory at every writable canonical location so native and
+  // App Store sandbox installations can discover the same explicit override.
+  for (const configRoot of candidatePaths) {
+    try {
+      ensureWritableDir(configRoot);
+      const configPath = join(configRoot, 'mcp_config.json');
+      const config: McpConfig = { dataDir };
+      writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
+    } catch {
+      // The configured data directory itself remains usable even if one
+      // discovery marker cannot be written; continue with the next candidate.
+    }
+  }
+}
+
+export function resolveDataDir(candidatePaths = getCandidatePaths()): string {
   const envOverride = process.env.SP_MCP_DATA_DIR;
   if (envOverride) {
     ensureIpcDirs(envOverride);
-    // Write mcp_config.json to standard location so plugin can find it
-    const standardPaths = getCandidatePaths();
-    for (const p of standardPaths) {
-      try {
-        ensureWritableDir(p);
-        const configPath = join(p, 'mcp_config.json');
-        const config: McpConfig = { dataDir: envOverride };
-        writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
-        break;
-      } catch { /* try next */ }
-    }
+    publishConfig(envOverride, candidatePaths);
     return envOverride;
   }
 
   // Check for mcp_config.json in candidate paths
-  for (const p of getCandidatePaths()) {
-    const configPath = join(p, 'mcp_config.json');
-    if (existsSync(configPath)) {
-      try {
+  for (const p of candidatePaths) {
+    try {
+      const configPath = join(p, 'mcp_config.json');
+      if (existsSync(configPath)) {
         const config: McpConfig = JSON.parse(readFileSync(configPath, 'utf-8'));
         if (config.dataDir && existsSync(config.dataDir) && !isTmpDataDir(config.dataDir)) {
           ensureIpcDirs(config.dataDir);
           return config.dataDir;
         }
-      } catch { /* ignore invalid config */ }
-    }
+      }
+    } catch { /* ignore inaccessible or invalid config */ }
   }
 
   // Probe for first writable path
-  for (const p of getCandidatePaths()) {
+  for (const p of candidatePaths) {
     try {
       ensureIpcDirs(p);
       return p;
@@ -100,8 +113,8 @@ export interface ResolvedDirs {
   responses: string;
 }
 
-export function resolveDirectories(): ResolvedDirs {
-  const base = resolveDataDir();
+export function resolveDirectories(candidatePaths = getCandidatePaths()): ResolvedDirs {
+  const base = resolveDataDir(candidatePaths);
   const commands = join(base, 'plugin_commands');
   const responses = join(base, 'plugin_responses');
   ensureWritableDir(commands);

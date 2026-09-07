@@ -90,9 +90,12 @@ async function setupDirectories() {
       const TMP_DATA_DIR = path.join(TMP_ROOT, APP);
       let candidates;
       if (os.platform() === 'darwin') {
+        // Native macOS builds use ~/Library/Application Support. Keep the
+        // Mac App Store container as a fallback, but do not let a stale Store
+        // directory shadow a working native installation.
         candidates = [
-          path.join(home, 'Library', 'Containers', 'com.super-productivity.app', 'Data', 'Library', 'Application Support', APP),
-          path.join(home, 'Library', 'Application Support', APP)
+          path.join(home, 'Library', 'Application Support', APP),
+          path.join(home, 'Library', 'Containers', 'com.super-productivity.app', 'Data', 'Library', 'Application Support', APP)
         ];
       } else if (os.platform() === 'win32') {
         const appData = (typeof process !== 'undefined' && process.env && process.env.APPDATA) || path.join(home, 'AppData', 'Roaming');
@@ -596,7 +599,7 @@ async function executeCommand(command) {
         break;
       }
       case 'ping':
-        result = { pong: true, pluginVersion: '1.6.0', protocolVersion: PROTOCOL_VERSION };
+        result = { pong: true, pluginVersion: '1.6.1', protocolVersion: PROTOCOL_VERSION };
         break;
       default:
         return { success: false, error: `Unknown command action: ${command.action}`, timestamp: Date.now() };
