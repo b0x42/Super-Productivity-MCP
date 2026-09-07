@@ -29,6 +29,13 @@ Reads resources for context, creates subtasks in batch, starts the timer, bulk-c
 
 → [More use cases](docs/use-cases.md)
 
+## Local deployment documentation
+
+For a pinned source-based macOS deployment, see:
+
+- [macOS setup and operations](docs/macos-setup.md)
+- [Troubleshooting](docs/troubleshooting.md)
+
 ## Installation
 
 ### 1. Install the SP Plugin
