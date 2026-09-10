@@ -12,17 +12,17 @@ If the connection check fails after a fresh install or reboot, toggle the plugin
 4. If paths differ between server and plugin, set `SP_MCP_DATA_DIR` (see below)
 5. Restart both SP and your MCP client
 
-## Mac App Store — Sandbox Path Mismatch
+## macOS — Sandbox Path Mismatch
 
-When SP is installed from the Mac App Store, it runs in a sandbox. The MCP server and the SP plugin resolve the shared data directory independently and can disagree on the path:
+Super Productivity can use two different shared-data locations on macOS. Native `.app` installs use the normal Application Support path; Mac App Store installs use the container path. The plugin prefers the native path and falls back to the container path, but the MCP server and plugin must ultimately use the same directory:
 
-- Sandbox: `~/Library/Containers/com.superproductivity.app/Data/Library/Application Support/super-productivity-mcp`
-- Non-sandbox: `~/.local/share/super-productivity-mcp`
+- Native `.app`: `~/Library/Application Support/super-productivity-mcp`
+- Mac App Store sandbox: `~/Library/Containers/com.superproductivity.app/Data/Library/Application Support/super-productivity-mcp`
 
 **Diagnose** — check which directory the plugin is actually writing to:
 
 ```bash
-ls -lt ~/.local/share/super-productivity-mcp/plugin_responses/ | head -5
+ls -lt ~/Library/Application\ Support/super-productivity-mcp/plugin_responses/ | head -5
 ls -lt ~/Library/Containers/com.superproductivity.app/Data/Library/Application\ Support/super-productivity-mcp/plugin_responses/ | head -5
 ```
 
@@ -58,7 +58,7 @@ Common values:
 
 | Scenario | Path |
 |----------|------|
-| macOS non-sandbox | `~/.local/share/super-productivity-mcp` |
+| macOS native `.app` | `~/Library/Application Support/super-productivity-mcp` |
 | macOS App Store sandbox | `~/Library/Containers/com.superproductivity.app/Data/Library/Application Support/super-productivity-mcp` |
 | Linux (standard) | `~/.local/share/super-productivity-mcp` |
 | Linux (Snap) | `~/snap/superproductivity/current/.local/share/super-productivity-mcp` |

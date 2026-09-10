@@ -21,7 +21,7 @@ describe('directories', () => {
     process.env.SP_MCP_DATA_DIR = customDir;
 
     const { resolveDataDir } = await import('../../src/ipc/directories.js');
-    const result = resolveDataDir();
+    const result = resolveDataDir([]);
     expect(result).toBe(customDir);
     expect(existsSync(customDir)).toBe(true);
   });
@@ -31,12 +31,52 @@ describe('directories', () => {
     process.env.SP_MCP_DATA_DIR = customDir;
 
     const { resolveDirectories } = await import('../../src/ipc/directories.js');
-    const dirs = resolveDirectories();
+    const dirs = resolveDirectories([]);
     expect(dirs.base).toBe(customDir);
     expect(dirs.commands).toBe(join(customDir, 'plugin_commands'));
     expect(dirs.responses).toBe(join(customDir, 'plugin_responses'));
     expect(existsSync(dirs.commands)).toBe(true);
     expect(existsSync(dirs.responses)).toBe(true);
+  });
+
+  it('prefers the native macOS data directory before the App Store fallback', async () => {
+    const { getCandidatePaths } = await import('../../src/ipc/directories.js');
+    const paths = getCandidatePaths('darwin', '/Users/test');
+
+    expect(paths).toEqual([
+      '/Users/test/Library/Application Support/super-productivity-mcp',
+      '/Users/test/Library/Containers/com.super-productivity.app/Data/Library/Application Support/super-productivity-mcp',
+    ]);
+  });
+
+  it('publishes an explicit override at the canonical discovery path', async () => {
+    const customDir = join(testDir, 'custom');
+    const canonicalDir = join(testDir, 'canonical');
+    process.env.SP_MCP_DATA_DIR = customDir;
+
+    const { resolveDataDir } = await import('../../src/ipc/directories.js');
+    const result = resolveDataDir([canonicalDir]);
+
+    expect(result).toBe(customDir);
+    expect(JSON.parse(readFileSync(join(canonicalDir, 'mcp_config.json'), 'utf8'))).toEqual({
+      dataDir: customDir,
+    });
+  });
+
+  it('publishes an explicit override to native and sandbox discovery paths', async () => {
+    const customDir = join(testDir, 'custom');
+    const nativeDir = join(testDir, 'native');
+    const sandboxDir = join(testDir, 'sandbox');
+    process.env.SP_MCP_DATA_DIR = customDir;
+
+    const { resolveDataDir } = await import('../../src/ipc/directories.js');
+    expect(resolveDataDir([nativeDir, sandboxDir])).toBe(customDir);
+
+    for (const candidate of [nativeDir, sandboxDir]) {
+      expect(JSON.parse(readFileSync(join(candidate, 'mcp_config.json'), 'utf8'))).toEqual({
+        dataDir: customDir,
+      });
+    }
   });
 
   it('linux candidates include /tmp fallback', async () => {
