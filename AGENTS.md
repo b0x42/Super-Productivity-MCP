@@ -6,11 +6,26 @@
 
 ```bash
 npm run build        # compile MCP server (tsup) + zip plugin → dist/plugin.zip
+npm run build:server # tsup only — dist/index.js
+npm run build:plugin # inline the pane into index.html, then zip → dist/plugin.zip
 npm run dev          # watch mode
 npm test             # vitest run
 npm run test:watch   # vitest watch
 npm run typecheck    # tsc --noEmit (use this, not npx tsc — tsc not in PATH)
 npm run lint         # eslint src/
+```
+
+A Makefile wraps these; the npm scripts stay the source of truth (CI and
+`prepublishOnly` call them directly). What it adds is dependency tracking —
+`dist/index.js` and `dist/plugin.zip` are real file targets, so an unchanged
+tree rebuilds nothing.
+
+```bash
+make                 # build both artifacts
+make verify          # typecheck + lint + test — the pre-commit gate
+make mcp-add         # register with Claude Code (SCOPE=local to override)
+make mcp-remove
+make clean
 ```
 
 ## Architecture

@@ -1,5 +1,9 @@
 // MCP Bridge Plugin for Super Productivity
 const PROTOCOL_VERSION = 1;
+// Kept in step with plugin/manifest.json by tests/unit/plugin/version.test.ts —
+// this was a literal in the ping handler and check_connection reported 1.6.0
+// from a 1.7.0 plugin for a whole release.
+const PLUGIN_VERSION = '1.7.0';
 const POLL_INTERVAL_MS = 2000;
 let commandDir = null;
 let responseDir = null;
@@ -59,7 +63,29 @@ function parseAtDateSyntax(title, now = new Date()) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseAtDateSyntax, executeCommand };
+  module.exports = { parseAtDateSyntax, executeCommand, PLUGIN_VERSION };
+}
+
+// Set one or more days in a timeSpentOnDay map and recompute the derived total.
+// SP stores timeSpent as the sum of the per-day map, and PluginAPI exposes no
+// addTimeSpent action to keep them in sync — writing timeSpentOnDay through the
+// generic updateTask means we own that recomputation. A day that lands on zero is
+// removed rather than kept, so get_worklog never reports a day with no work on it.
+// The total is summed once at the end, not per day.
+function applyDayTimes(timeSpentOnDay, changes) {
+  const map = Object.assign({}, timeSpentOnDay || {});
+  for (const change of changes) {
+    if (change.ms > 0) {
+      map[change.date] = change.ms;
+    } else {
+      delete map[change.date];
+    }
+  }
+  return { timeSpentOnDay: map, timeSpent: sumDayMap(map) };
+}
+
+function sumDayMap(map) {
+  return Object.keys(map || {}).reduce((sum, key) => sum + (map[key] || 0), 0);
 }
 
 // Local YYYY-MM-DD for "today", matching how SP's own getDbDateStr keys countOnDay
@@ -76,6 +102,23 @@ function missingHabitApiError() {
   const required = ['getAllSimpleCounters', 'getSimpleCounter', 'updateSimpleCounter', 'setSimpleCounterDate', 'deleteSimpleCounter', 'setCounter'];
   const missing = required.filter(fn => typeof PluginAPI[fn] !== 'function');
   return missing.length ? 'Habit management requires a newer version of Super Productivity.' : null;
+}
+
+// PluginAPI exposes getArchivedTasks() for reading but nothing that removes from
+// the archive, so an archived task can be seen and never deleted. Reporting it as
+// "not found" is misleading for a task get_tasks will happily return — name the
+// real reason and say where deletion is possible. Probed defensively: older SP
+// builds may not expose the archive at all, and a failure here must not turn a
+// clear error into a thrown one.
+async function archivedTaskError(taskId) {
+  if (typeof PluginAPI.getArchivedTasks !== 'function') return null;
+  try {
+    const archived = await PluginAPI.getArchivedTasks();
+    if (!archived.some(t => t.id === taskId)) return null;
+    return `Task ${taskId} is archived. Archived tasks cannot be deleted through the plugin API — remove it from the archive in Super Productivity.`;
+  } catch (e) {
+    return null;
+  }
 }
 
 async function setupDirectories() {
@@ -467,11 +510,72 @@ async function executeCommand(command) {
         result = null;
         break;
       }
+      case 'logTime':
+      case 'logTimeEntries': {
+        // PluginAPI has no addTimeSpent equivalent, and updateTask() silently no-ops on
+        // an unknown id (the quirk bulkUpdateTasks and startTask guard against), so the
+        // task has to be looked up before anything is written.
+        const logData = command.data || {};
+        // 'logTime' is the older single-day shape; normalise it so there is one code path.
+        const logEntries = logData.entries || [{ date: logData.date, durationMs: logData.durationMs }];
+        const allTasksForLog = await PluginAPI.getTasks();
+        const taskForLog = allTasksForLog.find(t => t.id === command.taskId);
+        if (!taskForLog) {
+          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+
+        const existingDays = taskForLog.timeSpentOnDay || {};
+        // SP always derives timeSpent from this map. A task whose stored total
+        // disagrees came from outside SP's reducers; recomputing corrects it, and
+        // the old value is reported back so the correction isn't silent.
+        const sumBefore = sumDayMap(existingDays);
+
+        const dayChanges = [];
+        const parentDeltas = [];
+        for (const entry of logEntries) {
+          const previous = existingDays[entry.date] || 0;
+          const next = logData.mode === 'set' ? entry.durationMs : previous + entry.durationMs;
+          dayChanges.push({ date: entry.date, ms: next });
+          if (next !== previous) parentDeltas.push({ date: entry.date, delta: next - previous });
+        }
+
+        const updated = applyDayTimes(existingDays, dayChanges);
+        await PluginAPI.updateTask(command.taskId, updated);
+
+        // SP treats a parent's tracked time as the aggregate of its subtasks, so the same
+        // deltas have to land on the parent — otherwise the parent and get_worklog's
+        // project totals drift from the subtask that actually recorded the work. All the
+        // affected days go in one update rather than one write per day.
+        if (taskForLog.parentId && parentDeltas.length) {
+          const parentForLog = allTasksForLog.find(t => t.id === taskForLog.parentId);
+          if (parentForLog) {
+            const parentDays = parentForLog.timeSpentOnDay || {};
+            const parentChanges = parentDeltas.map(function (d) {
+              return { date: d.date, ms: Math.max(0, (parentDays[d.date] || 0) + d.delta) };
+            });
+            await PluginAPI.updateTask(parentForLog.id, applyDayTimes(parentDays, parentChanges));
+          }
+        }
+
+        result = {
+          taskId: command.taskId,
+          dates: logEntries.map(function (e) { return e.date; }),
+          timeSpentOnDay: updated.timeSpentOnDay,
+          timeSpent: updated.timeSpent,
+        };
+        if (taskForLog.timeSpent !== sumBefore) result.previousTimeSpent = taskForLog.timeSpent;
+        break;
+      }
       case 'deleteTask': {
         const allTasksForDelete = await PluginAPI.getTasks();
         const taskToDelete = allTasksForDelete.find(t => t.id === command.taskId);
         if (!taskToDelete) {
-          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+          const archivedError = await archivedTaskError(command.taskId);
+          return {
+            success: false,
+            error: archivedError || `Task not found: ${command.taskId}`,
+            timestamp: Date.now(),
+          };
         }
         await PluginAPI.deleteTask(command.taskId);
         result = null;
@@ -596,7 +700,7 @@ async function executeCommand(command) {
         break;
       }
       case 'ping':
-        result = { pong: true, pluginVersion: '1.6.0', protocolVersion: PROTOCOL_VERSION };
+        result = { pong: true, pluginVersion: PLUGIN_VERSION, protocolVersion: PROTOCOL_VERSION };
         break;
       default:
         return { success: false, error: `Unknown command action: ${command.action}`, timestamp: Date.now() };

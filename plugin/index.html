@@ -1,3 +1,65 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>MCP Bridge</title></head>
-<body><script src="plugin.js"></script></body></html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP Tool Calls</title>
+<style>
+  :root {
+    --bg: #fff; --fg: #1a1a1a; --muted: #6b7280; --line: #e5e7eb;
+    --ok: #059669; --err: #dc2626; --err-bg: #fef2f2; --code-bg: #f6f7f9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1e1e; --fg: #e6e6e6; --muted: #9ca3af; --line: #333;
+      --ok: #34d399; --err: #f87171; --err-bg: #2a1416; --code-bg: #262626;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 12px; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0; }
+  #status { color: var(--muted); font-size: 12px; }
+  .entry { border-bottom: 1px solid var(--line); }
+  .head {
+    display: grid; grid-template-columns: 76px 1fr auto 56px;
+    gap: 10px; align-items: center; width: 100%;
+    padding: 8px 4px; background: none; border: 0; cursor: pointer;
+    color: inherit; font: inherit; text-align: left;
+  }
+  .head:hover { background: var(--code-bg); }
+  .time, .dur { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
+  .dur { text-align: right; }
+  .tool { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { font-size: 11px; text-align: right; color: var(--ok); }
+  .err .badge { color: var(--err); }
+  .err .tool { color: var(--err); }
+  .body { padding: 4px 4px 12px; }
+  .body h4 { margin: 8px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .err-msg { margin: 4px 0; padding: 8px; border-radius: 4px; background: var(--err-bg); color: var(--err); }
+  pre {
+    margin: 0; padding: 8px; border-radius: 4px; background: var(--code-bg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    overflow-x: auto; white-space: pre; max-height: 320px;
+  }
+  .empty { color: var(--muted); padding: 24px 4px; text-align: center; }
+  .empty.error { color: var(--err); }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Tool calls</h1>
+    <span id="status"></span>
+  </header>
+  <main id="entries"></main>
+  <!--
+    Loads dashboard.js only. plugin.js is the host-side background script and
+    runs its own command-processing loop; loading it here as well would start a
+    second loop inside the iframe, with both racing to claim command files.
+  -->
+  <script src="dashboard.js"></script>
+</body>
+</html>
