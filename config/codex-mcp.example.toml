@@ -1,0 +1,15 @@
+# Example only. Copy the relevant section to ~/.codex/config.toml and replace
+# every placeholder with an absolute path on the target machine.
+
+[mcp_servers.super_productivity]
+command = "/absolute/path/to/node"
+args = ["/absolute/path/to/Super-Productivity-MCP/dist/index.js"]
+
+# Allow read-only inspection without a write prompt. Keep task mutations
+# approval-gated.
+default_tools_approval_mode = "writes"
+startup_timeout_sec = 120
+
+[mcp_servers.super_productivity.env]
+# The server and the Super Productivity plugin must use the same directory.
+SP_MCP_DATA_DIR = "/absolute/path/to/super-productivity-mcp"
