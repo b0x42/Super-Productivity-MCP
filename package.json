@@ -1,6 +1,6 @@
 {
   "name": "super-productivity-mcp",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "MCP server for Super Productivity — manage tasks, projects, and tags via AI assistants",
   "main": "dist/index.js",
   "bin": {
@@ -53,6 +53,6 @@
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.0",
-    "vitest": "^4.1.5"
+    "vitest": "^5.0.0"
   }
 }
