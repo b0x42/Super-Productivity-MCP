@@ -5,9 +5,10 @@ vi.mock('../../../src/ipc/command-sender.js', () => ({
 }));
 
 import { sendCommand } from '../../../src/ipc/command-sender.js';
-import { updateProjectSchema } from '../../../src/tools/projects.js';
+import { updateProjectSchema, registerProjectTools } from '../../../src/tools/projects.js';
 import type { ResolvedDirs } from '../../../src/ipc/directories.js';
 import type { Response } from '../../../src/ipc/types.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 const mockSend = vi.mocked(sendCommand);
 const dirs: ResolvedDirs = { base: '/tmp/test', commands: '/tmp/test/pc', responses: '/tmp/test/pr' };
@@ -15,6 +16,19 @@ const dirs: ResolvedDirs = { base: '/tmp/test', commands: '/tmp/test/pc', respon
 // Instead of testing through McpServer (which has no public API to call tools),
 // we test the sendCommand integration and validation logic directly.
 // The tool registration is verified by the build + integration tests.
+//
+// The description-mapping tests below are the exception: they capture the real
+// registered update_project handler and invoke it directly, so the actual
+// `description` -> `data.description` mapping in projects.ts is exercised —
+// issue #107 was exactly this field missing from that mapping.
+type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>;
+const toolHandlers = new Map<string, ToolHandler>();
+const fakeServer = {
+  registerTool: (name: string, _config: unknown, handler: ToolHandler) => {
+    toolHandlers.set(name, handler);
+  },
+} as unknown as McpServer;
+registerProjectTools(fakeServer, dirs);
 
 function mockResponse(result: unknown): Response {
   return { success: true, result, timestamp: Date.now() };
@@ -95,6 +109,35 @@ describe('project tool logic', () => {
       });
       const call = mockSend.mock.calls[0][2] as { data: Record<string, unknown> };
       expect('folderId' in call.data).toBe(false);
+    });
+  });
+
+  // #107: create_project accepted description, update_project silently dropped it —
+  // there was no parameter for it at all, so the old value could never be changed.
+  describe('update_project description (via real handler)', () => {
+    it('sends the new description through to updateProject', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await toolHandlers.get('update_project')!({ project_id: 'proj-1', description: 'New description' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateProject', {
+        projectId: 'proj-1',
+        data: { description: 'New description' },
+      });
+    });
+
+    it('clears the description with an empty string', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await toolHandlers.get('update_project')!({ project_id: 'proj-1', description: '' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateProject', {
+        projectId: 'proj-1',
+        data: { description: '' },
+      });
+    });
+
+    it('omits description from data when not provided', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await toolHandlers.get('update_project')!({ project_id: 'proj-1', title: 'New Name' });
+      const call = mockSend.mock.calls[0][2] as { data: Record<string, unknown> };
+      expect('description' in call.data).toBe(false);
     });
   });
 
