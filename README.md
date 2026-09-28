@@ -36,6 +36,8 @@ For a pinned source-based macOS deployment, see:
 - [macOS setup and operations](docs/macos-setup.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
+For local development, the `Makefile` wraps the `npm run build`/`typecheck`/`lint`/`test` steps above with dependency tracking — see `AGENTS.md`.
+
 ## Installation
 
 ### 1. Install the SP Plugin

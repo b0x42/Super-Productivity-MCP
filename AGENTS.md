@@ -77,7 +77,7 @@ SP has no IndexedDB indexes on `tagIds`/`projectId` — filtering is always O(n)
 ## Gotchas
 
 - `npx tsc` pulls a wrong package — always use `npm run typecheck`
-- `npm run build` also runs `build:plugin` (zips `plugin/` → `dist/plugin.zip`) — don't run tsup alone
+- `npm run build` produces both artifacts (`dist/index.js` + `dist/plugin.zip`) — `build:server`/`tsup` alone only produces `dist/index.js`. Use `build:server` when you deliberately only need the server rebuilt; use `build` (or `make build`) for a deployable plugin zip
 - TypeScript 6 requires `"types": ["node"]` in tsconfig (already set) — removing it breaks all `node:` imports
 
 ## Specs
