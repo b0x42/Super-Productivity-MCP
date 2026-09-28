@@ -3,7 +3,7 @@ const PROTOCOL_VERSION = 1;
 // Kept in step with plugin/manifest.json by tests/unit/plugin/version.test.ts —
 // this was a literal in the ping handler and check_connection reported 1.6.0
 // from a 1.7.0 plugin for a whole release.
-const PLUGIN_VERSION = '1.6.1';
+const PLUGIN_VERSION = '1.6.2';
 const POLL_INTERVAL_MS = 2000;
 let commandDir = null;
 let responseDir = null;
