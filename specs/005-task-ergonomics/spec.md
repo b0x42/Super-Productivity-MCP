@@ -89,7 +89,7 @@ An AI agent breaks down a goal into a parent task + subtasks in one operation, a
 
 ### Valid Field Names for FR-001
 
-`id`, `title`, `isDone`, `projectId`, `parentId`, `tagIds`, `dueDay`, `dueWithTime`, `plannedAt`, `timeEstimate`, `timeSpent`, `notes`, `subTaskIds`, `doneOn`
+`id`, `title`, `isDone`, `projectId`, `parentId`, `tagIds`, `dueDay`, `dueWithTime`, `plannedAt`, `timeEstimate`, `timeSpent`, `notes`, `subTaskIds`, `doneOn`, `timeSpentOnDay`
 
 ## Success Criteria *(mandatory)*
 

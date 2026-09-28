@@ -14,6 +14,7 @@ interface TaskRecord {
   plannedAt?: number | null;
   timeEstimate: number;
   timeSpent: number;
+  timeSpentOnDay?: Record<string, number>;
   [key: string]: unknown;
 }
 
@@ -27,6 +28,7 @@ function shapeTask(t: TaskRecord) {
     plannedAt: t.plannedAt ?? null,
     timeEstimate: t.timeEstimate,
     timeSpent: t.timeSpent,
+    timeSpentOnDay: t.timeSpentOnDay ?? {},
     parentId: t.parentId ?? null,
   };
 }

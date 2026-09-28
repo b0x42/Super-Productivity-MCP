@@ -3,7 +3,7 @@ const PROTOCOL_VERSION = 1;
 // Kept in step with plugin/manifest.json by tests/unit/plugin/version.test.ts —
 // this was a literal in the ping handler and check_connection reported 1.6.0
 // from a 1.7.0 plugin for a whole release.
-const PLUGIN_VERSION = '1.6.0';
+const PLUGIN_VERSION = '1.6.1';
 const POLL_INTERVAL_MS = 2000;
 let commandDir = null;
 let responseDir = null;
@@ -66,6 +66,28 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = { parseAtDateSyntax, executeCommand, PLUGIN_VERSION };
 }
 
+// Set one or more days in a timeSpentOnDay map and recompute the derived total.
+// SP stores timeSpent as the sum of the per-day map, and PluginAPI exposes no
+// addTimeSpent action to keep them in sync — writing timeSpentOnDay through the
+// generic updateTask means we own that recomputation. A day that lands on zero is
+// removed rather than kept, so get_worklog never reports a day with no work on it.
+// The total is summed once at the end, not per day.
+function applyDayTimes(timeSpentOnDay, changes) {
+  const map = Object.assign({}, timeSpentOnDay || {});
+  for (const change of changes) {
+    if (change.ms > 0) {
+      map[change.date] = change.ms;
+    } else {
+      delete map[change.date];
+    }
+  }
+  return { timeSpentOnDay: map, timeSpent: sumDayMap(map) };
+}
+
+function sumDayMap(map) {
+  return Object.keys(map || {}).reduce((sum, key) => sum + (map[key] || 0), 0);
+}
+
 // Local YYYY-MM-DD for "today", matching how SP's own getDbDateStr keys countOnDay
 // (local calendar day, not UTC — avoids shifting a day in positive timezones).
 function todayLocalDateStr() {
@@ -111,9 +133,12 @@ async function setupDirectories() {
       const TMP_DATA_DIR = path.join(TMP_ROOT, APP);
       let candidates;
       if (os.platform() === 'darwin') {
+        // Native macOS builds use ~/Library/Application Support. Keep the
+        // Mac App Store container as a fallback, but do not let a stale Store
+        // directory shadow a working native installation.
         candidates = [
-          path.join(home, 'Library', 'Containers', 'com.super-productivity.app', 'Data', 'Library', 'Application Support', APP),
-          path.join(home, 'Library', 'Application Support', APP)
+          path.join(home, 'Library', 'Application Support', APP),
+          path.join(home, 'Library', 'Containers', 'com.super-productivity.app', 'Data', 'Library', 'Application Support', APP)
         ];
       } else if (os.platform() === 'win32') {
         const appData = (typeof process !== 'undefined' && process.env && process.env.APPDATA) || path.join(home, 'AppData', 'Roaming');
@@ -486,6 +511,60 @@ async function executeCommand(command) {
         }
         // Idempotent — no error if nothing is being tracked
         result = null;
+        break;
+      }
+      case 'logTimeEntries': {
+        // PluginAPI has no addTimeSpent equivalent, and updateTask() silently no-ops on
+        // an unknown id (the quirk bulkUpdateTasks and startTask guard against), so the
+        // task has to be looked up before anything is written.
+        const logData = command.data || {};
+        const logEntries = logData.entries;
+        const allTasksForLog = await PluginAPI.getTasks();
+        const taskForLog = allTasksForLog.find(t => t.id === command.taskId);
+        if (!taskForLog) {
+          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+
+        const existingDays = taskForLog.timeSpentOnDay || {};
+        // SP always derives timeSpent from this map. A task whose stored total
+        // disagrees came from outside SP's reducers; recomputing corrects it, and
+        // the old value is reported back so the correction isn't silent.
+        const sumBefore = sumDayMap(existingDays);
+
+        const dayChanges = [];
+        const parentDeltas = [];
+        for (const entry of logEntries) {
+          const previous = existingDays[entry.date] || 0;
+          const next = logData.mode === 'set' ? entry.durationMs : previous + entry.durationMs;
+          dayChanges.push({ date: entry.date, ms: next });
+          if (next !== previous) parentDeltas.push({ date: entry.date, delta: next - previous });
+        }
+
+        const updated = applyDayTimes(existingDays, dayChanges);
+        await PluginAPI.updateTask(command.taskId, updated);
+
+        // SP treats a parent's tracked time as the aggregate of its subtasks, so the same
+        // deltas have to land on the parent — otherwise the parent and get_worklog's
+        // project totals drift from the subtask that actually recorded the work. All the
+        // affected days go in one update rather than one write per day.
+        if (taskForLog.parentId && parentDeltas.length) {
+          const parentForLog = allTasksForLog.find(t => t.id === taskForLog.parentId);
+          if (parentForLog) {
+            const parentDays = parentForLog.timeSpentOnDay || {};
+            const parentChanges = parentDeltas.map(function (d) {
+              return { date: d.date, ms: Math.max(0, (parentDays[d.date] || 0) + d.delta) };
+            });
+            await PluginAPI.updateTask(parentForLog.id, applyDayTimes(parentDays, parentChanges));
+          }
+        }
+
+        result = {
+          taskId: command.taskId,
+          dates: logEntries.map(function (e) { return e.date; }),
+          timeSpentOnDay: updated.timeSpentOnDay,
+          timeSpent: updated.timeSpent,
+        };
+        if (taskForLog.timeSpent !== sumBefore) result.previousTimeSpent = taskForLog.timeSpent;
         break;
       }
       case 'deleteTask': {
