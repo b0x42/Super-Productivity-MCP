@@ -29,15 +29,6 @@ Reads resources for context, creates subtasks in batch, starts the timer, bulk-c
 
 → [More use cases](docs/use-cases.md)
 
-## Local deployment documentation
-
-For a pinned source-based macOS deployment, see:
-
-- [macOS setup and operations](docs/macos-setup.md)
-- [Troubleshooting](docs/troubleshooting.md)
-
-For local development, the `Makefile` wraps the `npm run build`/`typecheck`/`lint`/`test` steps above with dependency tracking — see `AGENTS.md`.
-
 ## Installation
 
 ### 1. Install the SP Plugin
@@ -260,6 +251,15 @@ Include these in task titles and they are parsed automatically:
 |------|-------|--------|
 | `plan_tasks_for_today` | Sets `plannedAt` on the task but does not add it to SP's internal Planner store, so the task may not appear in the Today view. | Upstream request: [super-productivity#7495](https://github.com/super-productivity/super-productivity/issues/7495) |
 | `create_project` / `update_project` | `folder_id` can be set or cleared, but there's no way to list folders through this server — the plugin API exposes no folder getter. Get the ID from the Super Productivity UI. | Upstream request: [super-productivity#9600](https://github.com/super-productivity/super-productivity/issues/9600) |
+
+## Local deployment documentation
+
+For a pinned source-based macOS deployment, see:
+
+- [macOS setup and operations](docs/macos-setup.md)
+- [Troubleshooting](docs/troubleshooting.md)
+
+For local development, the `Makefile` wraps the `npm run build`/`typecheck`/`lint`/`test` steps above with dependency tracking — see `AGENTS.md`.
 
 ## License
 
