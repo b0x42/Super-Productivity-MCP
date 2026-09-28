@@ -38,11 +38,15 @@ function formatDuration(ms) {
 }
 
 /**
- * Identity of an entry across refreshes. The log is append-only and a tool call
- * is unique by the instant it started plus its name, so this survives new
- * entries arriving above it.
+ * Identity of an entry across refreshes. Position can't be used — new entries
+ * arrive above older ones — so identity comes from the entry's own fields.
+ * `seq` (a per-process write counter the recorder stamps on each entry)
+ * disambiguates two calls to the same tool finishing in the same millisecond;
+ * older log lines written before `seq` existed fall back to ts + tool.
  */
 function entryKey(entry) {
+  var seq = entry && entry.seq;
+  if (typeof seq === 'number') return (entry.ts) + '|' + (entry.tool) + '|' + seq;
   return (entry && entry.ts) + '|' + (entry && entry.tool);
 }
 
@@ -67,14 +71,18 @@ if (typeof module !== 'undefined' && module.exports) {
 
 // ---------------------------------------------------------------- reading the log
 
-// Probes the same candidates plugin.js resolves, but only looks for an existing
-// log — the pane must never create directories or decide where the IPC dir goes.
+// Probes the same candidates plugin.js resolves, including an SP_MCP_DATA_DIR
+// override recorded in mcp_config.json — otherwise a redirected data dir makes
+// the pane show "no calls recorded" while the server logs elsewhere. Only
+// looks for an existing log; the pane must never create directories or decide
+// where the IPC dir goes.
 var READ_LOG_SCRIPT = [
   "const fs = require('fs');",
   "const path = require('path');",
   "const os = require('os');",
   "const home = os.homedir();",
   "const APP = 'super-productivity-mcp';",
+  "const TMP_ROOT = '/tmp';",
   "let candidates;",
   "if (os.platform() === 'darwin') {",
   "  candidates = [",
@@ -95,7 +103,20 @@ var READ_LOG_SCRIPT = [
   "    path.join('/tmp', APP)",
   "  ];",
   "}",
+  "function isTmpDataDir(dir) { return dir === TMP_ROOT || dir.indexOf(TMP_ROOT + '/') === 0; }",
+  "let dataDir = null;",
   "for (const dir of candidates) {",
+  "  if (isTmpDataDir(dir)) continue;",
+  "  try {",
+  "    const cfg = path.join(dir, 'mcp_config.json');",
+  "    if (fs.existsSync(cfg)) {",
+  "      const c = JSON.parse(fs.readFileSync(cfg, 'utf-8'));",
+  "      if (c.dataDir && fs.existsSync(c.dataDir) && !isTmpDataDir(c.dataDir)) { dataDir = c.dataDir; break; }",
+  "    }",
+  "  } catch (e) { /* ignore invalid or inaccessible config */ }",
+  "}",
+  "const searchDirs = dataDir ? [dataDir] : candidates;",
+  "for (const dir of searchDirs) {",
   "  const file = path.join(dir, '" + LOG_FILENAME + "');",
   "  if (fs.existsSync(file)) return { text: fs.readFileSync(file, 'utf-8'), path: file };",
   "}",

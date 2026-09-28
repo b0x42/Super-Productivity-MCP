@@ -85,6 +85,16 @@ describe('entryKey', () => {
   it('distinguishes two tools called at the same instant', () => {
     expect(entryKey({ ts: 1, tool: 'get_tasks' })).not.toBe(entryKey({ ts: 1, tool: 'log_time' }));
   });
+
+  it('uses seq to distinguish two calls to the same tool in the same millisecond', () => {
+    const a = entryKey({ ts: 1, tool: 'get_tasks', seq: 0 });
+    const b = entryKey({ ts: 1, tool: 'get_tasks', seq: 1 });
+    expect(a).not.toBe(b);
+  });
+
+  it('falls back to ts + tool for older entries recorded before seq existed', () => {
+    expect(entryKey({ ts: 1, tool: 'get_tasks' })).toBe('1|get_tasks');
+  });
 });
 
 describe('hasChanged', () => {

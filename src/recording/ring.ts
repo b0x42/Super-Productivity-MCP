@@ -17,5 +17,7 @@ export function needsPrune(lineCount: number, max: number): boolean {
 /** Keep the newest `max` entries, dropping the oldest. Blank lines are discarded. */
 export function prune(lines: string[], max: number): string[] {
   const entries = lines.filter(line => line.trim() !== '');
-  return entries.length <= max ? entries : entries.slice(-max);
+  // slice(-max) with max === 0 returns the whole array (slice(-0) is slice(0)
+  // in JS), so the cap must be applied via the start offset instead.
+  return entries.length <= max ? entries : entries.slice(entries.length - max);
 }

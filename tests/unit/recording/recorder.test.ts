@@ -52,6 +52,14 @@ describe('createRecorder', () => {
     expect(entries()[0].args._truncated).toBe(true);
   });
 
+  it('stamps an increasing seq so same-millisecond calls stay distinguishable', () => {
+    const rec = createRecorder(dirs);
+    rec.record(entry());
+    rec.record(entry());
+    const [first, second] = entries();
+    expect(second.seq).toBeGreaterThan(first.seq);
+  });
+
   it('enforces the cap, keeping the newest entries', () => {
     const rec = createRecorder(dirs, { max: 5 });
     for (let i = 0; i < 12; i++) rec.record(entry({ tool: `tool-${i}` }));

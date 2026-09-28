@@ -57,6 +57,12 @@ export function createRecorder(dirs: ResolvedDirs, opts: RecorderOptions = {}): 
   // let the log grow without bound.
   let entryCount = countExistingEntries(path);
 
+  // A process-local tiebreaker: two calls to the same tool can finish within
+  // the same millisecond, and the pane's row identity (ts + tool) would then
+  // collide. Not seeded from disk — it only needs to disambiguate writes made
+  // by this process, not be globally unique.
+  let nextSeq = 0;
+
   function rewritePruned(): void {
     const kept = prune(readFileSync(path, 'utf-8').split('\n'), max);
     // Write-and-rename so a crash mid-prune can't leave a half-written log.
@@ -77,6 +83,7 @@ export function createRecorder(dirs: ResolvedDirs, opts: RecorderOptions = {}): 
       try {
         const line = JSON.stringify({
           ...entry,
+          seq: nextSeq++,
           args: truncatePayload(entry.args, maxPayloadBytes),
           result: truncatePayload(entry.result, maxPayloadBytes),
         });

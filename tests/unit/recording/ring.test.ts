@@ -46,4 +46,8 @@ describe('prune', () => {
   it('discards blank lines from a trailing newline', () => {
     expect(prune(['a', '', 'b', ''], 5)).toEqual(['a', 'b']);
   });
+
+  it('keeps nothing when the cap is zero', () => {
+    expect(prune(['a', 'b', 'c'], 0)).toEqual([]);
+  });
 });
