@@ -1,5 +1,9 @@
 // MCP Bridge Plugin for Super Productivity
 const PROTOCOL_VERSION = 1;
+// Kept in step with plugin/manifest.json by tests/unit/plugin/version.test.ts —
+// this was a literal in the ping handler and check_connection reported 1.6.0
+// from a 1.7.0 plugin for a whole release.
+const PLUGIN_VERSION = '1.6.1';
 const POLL_INTERVAL_MS = 2000;
 let commandDir = null;
 let responseDir = null;
@@ -59,7 +63,7 @@ function parseAtDateSyntax(title, now = new Date()) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseAtDateSyntax, executeCommand };
+  module.exports = { parseAtDateSyntax, executeCommand, PLUGIN_VERSION };
 }
 
 // Set one or more days in a timeSpentOnDay map and recompute the derived total.
@@ -98,6 +102,23 @@ function missingHabitApiError() {
   const required = ['getAllSimpleCounters', 'getSimpleCounter', 'updateSimpleCounter', 'setSimpleCounterDate', 'deleteSimpleCounter', 'setCounter'];
   const missing = required.filter(fn => typeof PluginAPI[fn] !== 'function');
   return missing.length ? 'Habit management requires a newer version of Super Productivity.' : null;
+}
+
+// PluginAPI exposes getArchivedTasks() for reading but nothing that removes from
+// the archive, so an archived task can be seen and never deleted. Reporting it as
+// "not found" is misleading for a task get_tasks will happily return — name the
+// real reason and say where deletion is possible. Probed defensively: older SP
+// builds may not expose the archive at all, and a failure here must not turn a
+// clear error into a thrown one.
+async function archivedTaskError(taskId) {
+  if (typeof PluginAPI.getArchivedTasks !== 'function') return null;
+  try {
+    const archived = await PluginAPI.getArchivedTasks();
+    if (!archived.some(t => t.id === taskId)) return null;
+    return `Task ${taskId} is archived. Archived tasks cannot be deleted through the plugin API — remove it from the archive in Super Productivity.`;
+  } catch (e) {
+    return null;
+  }
 }
 
 async function setupDirectories() {
@@ -550,7 +571,12 @@ async function executeCommand(command) {
         const allTasksForDelete = await PluginAPI.getTasks();
         const taskToDelete = allTasksForDelete.find(t => t.id === command.taskId);
         if (!taskToDelete) {
-          return { success: false, error: `Task not found: ${command.taskId}`, timestamp: Date.now() };
+          const archivedError = await archivedTaskError(command.taskId);
+          return {
+            success: false,
+            error: archivedError || `Task not found: ${command.taskId}`,
+            timestamp: Date.now(),
+          };
         }
         await PluginAPI.deleteTask(command.taskId);
         result = null;
@@ -675,7 +701,7 @@ async function executeCommand(command) {
         break;
       }
       case 'ping':
-        result = { pong: true, pluginVersion: '1.6.1', protocolVersion: PROTOCOL_VERSION };
+        result = { pong: true, pluginVersion: PLUGIN_VERSION, protocolVersion: PROTOCOL_VERSION };
         break;
       default:
         return { success: false, error: `Unknown command action: ${command.action}`, timestamp: Date.now() };
