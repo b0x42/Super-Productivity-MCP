@@ -60,6 +60,16 @@ describe('project tool logic', () => {
         data: { title: 'Work', folderId: 'folder-1' },
       });
     });
+
+    // description used a truthy check, so an explicit empty string was
+    // indistinguishable from omitting it entirely (via real handler).
+    it('sends an explicitly empty description rather than dropping it', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse('proj-999'));
+      await toolHandlers.get('create_project')!({ title: 'Work', description: '' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'addProject', {
+        data: { title: 'Work', description: '' },
+      });
+    });
   });
 
   describe('get_projects via sendCommand', () => {

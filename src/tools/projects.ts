@@ -51,7 +51,7 @@ export function registerProjectTools(server: McpServer, dirs: ResolvedDirs): voi
       return errorResult('folder_id must not be empty');
     }
     const data: Record<string, unknown> = { title };
-    if (description) data.description = description;
+    if (description !== undefined) data.description = description;
     if (color) data.theme = { primary: color };
     if (folder_id !== undefined) data.folderId = folder_id;
     const res = await sendCommand(dirs, 'addProject', { data });
