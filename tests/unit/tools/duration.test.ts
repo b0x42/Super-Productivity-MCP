@@ -57,4 +57,8 @@ describe('parseDuration', () => {
   it('rejects free text', () => {
     expect(parseDuration('about an hour')).toBeNull();
   });
+
+  it('rejects a digit string long enough to overflow to Infinity, rather than returning it', () => {
+    expect(parseDuration(`${'9'.repeat(300)}h`)).toBeNull();
+  });
 });

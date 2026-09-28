@@ -82,7 +82,7 @@ describe('executeCommand: bulkUpdateTasks partial-success with invalid task_id',
 // logTime writes the per-day map itself: PluginAPI has no addTimeSpent, only the
 // generic updateTask, so the plugin owns recomputing timeSpent and rolling the
 // delta up to the parent — the two things SP's own addTimeSpent action does.
-describe('executeCommand: logTime', () => {
+describe('executeCommand: logTimeEntries (single day)', () => {
   const HOUR = 3_600_000;
   let tasks: Record<string, unknown>[];
 
@@ -95,8 +95,15 @@ describe('executeCommand: logTime', () => {
     };
   });
 
-  const logTime = (taskId: string, data: Record<string, unknown>) =>
-    executeCommand({ action: 'logTime', taskId, data });
+  // Drives the single-entry case through the real logTimeEntries action — tasks.ts
+  // always normalises to an entries array, so that's the only shape the plugin
+  // actually receives in production.
+  const logTime = (taskId: string, data: { date: string; durationMs: number; mode: string }) =>
+    executeCommand({
+      action: 'logTimeEntries',
+      taskId,
+      data: { entries: [{ date: data.date, durationMs: data.durationMs }], mode: data.mode },
+    });
 
   const patchFor = (taskId: string) =>
     globalThis.PluginAPI.updateTask.mock.calls.find(([id]) => id === taskId)?.[1];

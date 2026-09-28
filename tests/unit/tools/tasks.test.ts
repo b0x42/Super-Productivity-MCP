@@ -910,6 +910,13 @@ describe('log_time multi-day', () => {
     expect(mockSend).not.toHaveBeenCalled();
   });
 
+  it('rejects date and entries together rather than silently dropping date', async () => {
+    const res = await callLogTime({ task_id: 't1', date: '2026-08-30', entries: [{ date: '2026-08-31', duration: '2h' }] });
+    expect(res.isError).toBe(true);
+    expect(errorOf(res)).toMatch(/date/i);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
   it('rejects a call with neither duration nor entries', async () => {
     const res = await callLogTime({ task_id: 't1' });
     expect(res.isError).toBe(true);

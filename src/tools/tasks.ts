@@ -624,6 +624,9 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (entries === undefined && duration === undefined) {
         return errorResult('Pass duration to log one day, or entries to log several');
       }
+      if (entries !== undefined && date !== undefined) {
+        return errorResult('date is only meaningful alongside duration — put each day\'s date in its entries element instead');
+      }
 
       // The single-day form is just a one-entry list — one validation path and one
       // wire shape, so the two forms cannot drift apart.

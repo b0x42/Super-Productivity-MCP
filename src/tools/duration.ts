@@ -21,5 +21,8 @@ export function parseDuration(input: string): number | null {
   for (const [, amount, unit] of trimmed.matchAll(TOKEN_RE)) {
     ms += parseInt(amount, 10) * UNIT_MS[unit.toLowerCase()];
   }
-  return ms;
+  // A digit string long enough to overflow to Infinity would otherwise reach
+  // callers as null over JSON.stringify, indistinguishable from "clear this
+  // day" in mode "set" — reject it here instead, where it's still a duration.
+  return Number.isSafeInteger(ms) ? ms : null;
 }

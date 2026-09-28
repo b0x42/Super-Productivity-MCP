@@ -489,14 +489,12 @@ async function executeCommand(command) {
         result = null;
         break;
       }
-      case 'logTime':
       case 'logTimeEntries': {
         // PluginAPI has no addTimeSpent equivalent, and updateTask() silently no-ops on
         // an unknown id (the quirk bulkUpdateTasks and startTask guard against), so the
         // task has to be looked up before anything is written.
         const logData = command.data || {};
-        // 'logTime' is the older single-day shape; normalise it so there is one code path.
-        const logEntries = logData.entries || [{ date: logData.date, durationMs: logData.durationMs }];
+        const logEntries = logData.entries;
         const allTasksForLog = await PluginAPI.getTasks();
         const taskForLog = allTasksForLog.find(t => t.id === command.taskId);
         if (!taskForLog) {
