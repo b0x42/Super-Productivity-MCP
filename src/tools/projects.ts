@@ -26,6 +26,7 @@ export const getProjectsSchema = z.object(getProjectsShape).strict();
 const updateProjectShape = {
   project_id: z.string().describe('Project ID to update'),
   title: z.string().optional().describe('New title'),
+  description: z.string().optional().describe('New description'),
   color: z.string().optional().describe('New color (hex code)'),
   folder_id: z
     .string()
@@ -50,7 +51,7 @@ export function registerProjectTools(server: McpServer, dirs: ResolvedDirs): voi
       return errorResult('folder_id must not be empty');
     }
     const data: Record<string, unknown> = { title };
-    if (description) data.description = description;
+    if (description !== undefined) data.description = description;
     if (color) data.theme = { primary: color };
     if (folder_id !== undefined) data.folderId = folder_id;
     const res = await sendCommand(dirs, 'addProject', { data });
@@ -73,13 +74,14 @@ export function registerProjectTools(server: McpServer, dirs: ResolvedDirs): voi
       'UI — this server has no way to list folders. Pass folder_id: null to clear the folder ' +
       'assignment (move the project back to the root); omit folder_id to leave it unchanged.',
     inputSchema: updateProjectSchema,
-  }, async ({ project_id, title, color, folder_id }) => {
+  }, async ({ project_id, title, description, color, folder_id }) => {
     if (!project_id?.trim()) return errorResult('project_id is required');
     if (folder_id !== undefined && folder_id !== null && !folder_id.trim()) {
       return errorResult('folder_id must not be empty');
     }
     const data: Record<string, unknown> = {};
     if (title !== undefined) data.title = title;
+    if (description !== undefined) data.description = description;
     if (color !== undefined) data.theme = { primary: color };
     if (folder_id !== undefined) data.folderId = folder_id;
     const res = await sendCommand(dirs, 'updateProject', { projectId: project_id, data });
