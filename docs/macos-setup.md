@@ -21,7 +21,7 @@ appears unresponsive.
 | Codex registration | `~/.codex/config.toml` | No; keep an example in `config/` |
 | Super Productivity application data and task database | `~/Library/Application Support/superProductivity/` | No |
 | MCP IPC directory | `~/Library/Application Support/super-productivity-mcp/` | No |
-| App Store sandbox IPC fallback | `~/Library/Containers/com.superproductivity.app/Data/Library/Application Support/super-productivity-mcp/` | No |
+| App Store sandbox IPC fallback | `~/Library/Containers/com.super-productivity.app/Data/Library/Application Support/super-productivity-mcp/` | No |
 
 Do not commit task databases, IPC command/response files, local logs, tokens,
 or a machine-specific Codex configuration. The repository should document how
@@ -117,14 +117,14 @@ The plugin checks both of these locations:
 
 ```text
 ~/Library/Application Support/super-productivity-mcp
-~/Library/Containers/com.superproductivity.app/Data/Library/Application Support/super-productivity-mcp
+~/Library/Containers/com.super-productivity.app/Data/Library/Application Support/super-productivity-mcp
 ```
 
 To see which location is active:
 
 ```bash
 ls -lt ~/Library/Application\ Support/super-productivity-mcp/plugin_responses/ 2>/dev/null | head -5
-ls -lt ~/Library/Containers/com.superproductivity.app/Data/Library/Application\ Support/super-productivity-mcp/plugin_responses/ 2>/dev/null | head -5
+ls -lt ~/Library/Containers/com.super-productivity.app/Data/Library/Application\ Support/super-productivity-mcp/plugin_responses/ 2>/dev/null | head -5
 ```
 
 If the plugin writes to the sandbox location, set `SP_MCP_DATA_DIR` to that
