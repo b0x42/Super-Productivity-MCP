@@ -29,6 +29,13 @@ Reads resources for context, creates subtasks in batch, starts the timer, bulk-c
 
 → [More use cases](docs/use-cases.md)
 
+## Local deployment documentation
+
+For a pinned source-based macOS deployment, see:
+
+- [macOS setup and operations](docs/macos-setup.md)
+- [Troubleshooting](docs/troubleshooting.md)
+
 ## Installation
 
 ### 1. Install the SP Plugin
@@ -206,6 +213,21 @@ happens with data imported from other tools — `log_time` recomputes from the
 worklog and reports the old value as `previousTimeSpent`, so the correction is
 visible rather than silent.
 
+## Tool Call Timeline
+
+The plugin adds a **MCP Bridge** pane to Super Productivity's menu listing what
+the assistant has done — one row per tool call with the time, tool name,
+duration, and whether it succeeded. Click a row to see the arguments it was
+called with and the result it returned; failures show the error message.
+
+The server writes each call to `tool-calls.jsonl` in the same data directory it
+uses for IPC (`debug_directories` shows the path). The log keeps the most recent
+500 calls and is created mode 0600. Individual arguments or results over 8KB are
+replaced by a marker recording how many bytes were elided, so a `get_tasks` over
+a large task list doesn't copy your database into a flat file.
+
+Recording is best-effort: if the log can't be written, the tool call still
+succeeds and returns normally.
 
 ## SP Short Syntax
 
