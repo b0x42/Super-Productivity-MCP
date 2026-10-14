@@ -21,3 +21,11 @@ No `NEEDS CLARIFICATION` markers remain in the Technical Context (all three clar
 **Alternatives considered**:
 - Call `PluginAPI.deleteProject` directly with no existence pre-check, relying entirely on whatever error the host throws — rejected because `deleteTask`'s existing pre-check precedent exists specifically to produce a predictable, testable error message rather than depending on the exact wording of an SP-internal exception.
 - Reimplement the Inbox-refusal and cascade logic in the plugin instead of delegating to `PluginAPI.deleteProject` — rejected per Constitution VI and the spec's explicit Assumption that this feature does not reimplement SP's own cascade.
+
+## Correction (found during manual E2E validation, T013): `deleteProject` requires an explicit manifest permission
+
+**What happened**: the official `@super-productivity/plugin-api` TypeScript types and SP's own source code (both checked during planning) show no indication that calling `PluginAPI.deleteProject` requires anything beyond the method being present. The live host disagreed: the first manual test call failed with `"[PluginBridge] PluginAPI.deleteProject is blocked: this plugin does not declare the \"deleteProject\" permission. Add \"deleteProject\" to the manifest \"permissions\"."` — a runtime permission gate not documented in the plugin-api types package, not mentioned in the changelog, and not inferable from the source files read during Phase 0/1 research.
+
+**Resolution**: added `"deleteProject"` to `plugin/manifest.json`'s `permissions` array (alongside the existing `"nodeExecution"` and `"showIndexHtmlAsView"`). After rebuilding and reinstalling the plugin, all 11 quickstart.md steps passed as documented.
+
+**Why this wasn't caught earlier**: this is a genuine gap in the available documentation sources, not a research error — the permission requirement only surfaces at runtime from the live plugin host, and no static source (types package, GitHub source, changelog) mentioned it. Recorded here so a future contributor reviewing this feature's research doesn't wonder why `deleteTask`-pattern work alone wasn't sufficient.

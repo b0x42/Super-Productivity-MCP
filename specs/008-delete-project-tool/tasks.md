@@ -74,7 +74,7 @@ Single project (per plan.md Structure Decision) — `src/`, `plugin/`, `tests/` 
 - [X] T010 [P] Update `README.md`'s Prerequisites section: raise the blanket minimum Super Productivity version line from `>= 14.0.0` to `>= 19.0.1` (per research.md and T008, the manifest's `minSupVersion` is a single global value, not per-tool, so the Prerequisites line must match it exactly — no caveat line needed, unlike the habit-tools runtime-probe case which deliberately kept the manifest minimum unchanged) per spec FR-009
 - [X] T011 [P] Add a `delete_project` row to the "Available Tools" table in `README.md`, directly after the `update_project` row, with a description matching the tone of the existing `delete_task` row ("Permanently delete a task (parent deletes subtasks too)...") — e.g. "Permanently delete a project and all tasks it contains. Cannot delete the Inbox."
 - [X] T012 Run `npm run typecheck`, `npm run lint`, and `npm test` together; fix any failures before considering the feature complete
-- [ ] T013 Execute the manual end-to-end validation steps in `quickstart.md` (steps 1–11) against a running Super Productivity >= 19.0.1 instance with the rebuilt `dist/plugin.zip` installed, confirming all three edge cases (repeat deletion, Inbox refusal, nonexistent ID) behave exactly as documented
+- [X] T013 Execute the manual end-to-end validation steps in `quickstart.md` (steps 1–11) against a running Super Productivity >= 19.0.1 instance with the rebuilt `dist/plugin.zip` installed, confirming all three edge cases (repeat deletion, Inbox refusal, nonexistent ID) behave exactly as documented
 
 ---
 
