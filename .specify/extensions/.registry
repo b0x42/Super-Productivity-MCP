@@ -18,6 +18,20 @@
       },
       "registered_skills": [],
       "installed_at": "2026-04-20T07:03:33.358171+00:00"
+    },
+    "github": {
+      "version": "1.0.2",
+      "source": "local",
+      "manifest_hash": "sha256:384027822560387c1b5573452e64d63e20de9edb79305fa4d57ace2d9d69848c",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "kiro-cli": [
+          "speckit.github.taskstoissues"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-10-14T12:59:45.730849+00:00"
     }
   }
 }

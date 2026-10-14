@@ -1,4 +1,16 @@
 {
-  "integration": "claude",
-  "version": "0.8.2.dev0"
+  "version": "1.1.4.dev0",
+  "integration_state_schema": 1,
+  "installed_integrations": [
+    "claude",
+    "kiro-cli"
+  ],
+  "integration_settings": {
+    "kiro-cli": {
+      "script": "sh",
+      "invoke_separator": "."
+    }
+  },
+  "integration": "kiro-cli",
+  "default_integration": "kiro-cli"
 }
