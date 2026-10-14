@@ -95,6 +95,8 @@ const updateTaskShape = {
   due_day: z.string().optional().describe('Due date in ISO format (e.g. 2026-04-20), or empty string to clear'),
   deadline_day: z.string().optional().describe('Deadline date in ISO format (e.g. 2026-04-20), or empty string to clear. Independent from due_day/planned_at.'),
   planned_at: z.number().nullable().optional().describe('Unix ms timestamp to plan task for a specific time (e.g. start of today = plan for today). Pass null to unplan. Independent from due_day.'),
+  due_with_time: z.number().int().positive().nullable().optional().describe('Unix ms timestamp to schedule the task at a specific time (SP "dueWithTime"). Clears dueDay — SP keeps the two mutually exclusive — so it cannot be combined with due_day. Pass null to clear. Does not notify on its own; set remind_at for that.'),
+  remind_at: z.number().int().positive().optional().describe('Unix ms timestamp at which SP fires a reminder notification for the task (SP "remindAt"), usually equal to or shortly before due_with_time. Clearing is not supported: SP\'s plugin API rejects a null remindAt.'),
   time_estimate: z.number().optional().describe('Time estimate in milliseconds'),
   tag_ids: z.array(z.string()).optional().describe('Bulk-replace all tags with this list (FR-003)'),
 };
@@ -305,8 +307,11 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       description: 'Update an existing task. Supports SP short syntax in the title. Time spent is not settable here — SP derives it from the per-day worklog, so use log_time.',
       inputSchema: updateTaskSchema,
     },
-    async ({ task_id, title, notes, is_done, due_day, deadline_day, planned_at, time_estimate, tag_ids }) => {
+    async ({ task_id, title, notes, is_done, due_day, deadline_day, planned_at, due_with_time, remind_at, time_estimate, tag_ids }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
+      if (due_with_time != null && due_day) {
+        return errorResult('due_day and due_with_time are mutually exclusive — pass only one');
+      }
 
       const data: Record<string, unknown> = {};
       if (title !== undefined) data.title = title;
@@ -315,9 +320,25 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         data.isDone = is_done;
         data.doneOn = is_done ? Date.now() : null;
       }
-      if (due_day !== undefined) data.dueDay = due_day || null;
+      if (due_day !== undefined) {
+        data.dueDay = due_day || null;
+        // Same mutual exclusivity SP's own scheduleTaskWithTime reducer enforces, applied
+        // in this direction too: setting a plain due_day on a task that already carries a
+        // timed dueWithTime must clear it, or the task would end up with both set — a state
+        // SP's own reducer never produces. Only clears when due_with_time wasn't itself
+        // passed in this same call; that case is handled below instead.
+        if (due_day && due_with_time === undefined) data.dueWithTime = null;
+      }
       if (deadline_day !== undefined) data.deadlineDay = deadline_day || null;
       if (planned_at !== undefined) data.plannedAt = planned_at;
+      // Same mutual exclusivity SP's own scheduleTaskWithTime reducer enforces:
+      // setting dueWithTime clears dueDay.
+      if (due_with_time !== undefined) {
+        data.dueWithTime = due_with_time;
+        if (due_with_time !== null) data.dueDay = null;
+      }
+      // SP's reminder selector picks up any non-done task with a numeric remindAt.
+      if (remind_at !== undefined) data.remindAt = remind_at;
       if (time_estimate !== undefined) data.timeEstimate = time_estimate;
       // tag_ids replaces the entire tag list; use add_tag_to_task / remove_tag_from_task for incremental changes
       if (tag_ids !== undefined) data.tagIds = tag_ids;
