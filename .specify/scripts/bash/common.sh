@@ -373,3 +373,17 @@ except Exception:
     return 1
 }
 
+# Resolve a template through the same override stack as resolve_template(), but
+# output its file content directly instead of its path. Added because newer
+# callers (setup-tasks.sh, scripts/bash/resolve-template.sh) read content, not a
+# path, and this installed common.sh predated that calling convention — without
+# it, /speckit.tasks fails with "command not found" before it can even start.
+resolve_template_content() {
+    local template_name="$1"
+    local repo_root="$2"
+    local path
+    path=$(resolve_template "$template_name" "$repo_root") || return 1
+    cat "$path"
+}
+
+
