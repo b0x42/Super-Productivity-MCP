@@ -138,7 +138,7 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | `create_task` | Create a task (supports SP short syntax) |
 | `create_task_with_subtasks` | Create a parent task + subtasks in one operation |
 | `get_tasks` | List tasks — filter by project, tag, done, archived, search (title+notes), `parents_only`, `overdue`, `unscheduled`, `planned_for_today`, `recurring_only`, `fields` |
-| `update_task` | Update title, notes, done state, due date, deadline, `planned_at`, time estimate, tags |
+| `update_task` | Update title, notes, done state, due date, deadline, `planned_at`, timed schedule (`due_with_time`) and reminder (`remind_at`) ⚠️ [limited](#known-limitations), time estimate, tags |
 | `complete_task` | Mark a task as complete |
 | `delete_task` | Permanently delete a task (parent deletes subtasks too). Archived tasks can't be deleted — SP's plugin API is read-only for the archive |
 | `start_task` | Start the time tracker on a task |
@@ -251,6 +251,7 @@ Include these in task titles and they are parsed automatically:
 |------|-------|--------|
 | `plan_tasks_for_today` | Sets `plannedAt` on the task but does not add it to SP's internal Planner store, so the task may not appear in the Today view. | Upstream request: [super-productivity#7495](https://github.com/super-productivity/super-productivity/issues/7495) |
 | `create_project` / `update_project` | `folder_id` can be set or cleared, but there's no way to list folders through this server — the plugin API exposes no folder getter. Get the ID from the Super Productivity UI. | Upstream request: [super-productivity#9600](https://github.com/super-productivity/super-productivity/issues/9600) |
+| `update_task` | `remind_at` can be set but not cleared — SP's plugin API validates `remindAt` as a plain `number` and rejects `null`. | Constraint of SP's plugin API, no upstream request filed |
 
 ## Local deployment documentation
 
