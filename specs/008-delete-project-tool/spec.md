@@ -5,6 +5,14 @@
 **Status**: Draft
 **Input**: User description: "Add a delete_project MCP tool that permanently deletes a project in Super Productivity, mirroring the existing delete_task tool's pattern, by wiring up the plugin API's deleteProject(projectId) method (new in SP v19.0.1) through projects.ts and plugin/plugin.js."
 
+## Clarifications
+
+### Session 2026-10-14
+
+- Q: What should `delete_project` do about tasks that are currently time-tracked when their project gets deleted? → A: Rely entirely on Super Productivity's native `deleteProject` cascade with no special-casing; if the active timer breaks, that's an existing-app behavior, not something this feature should patch around.
+- Q: Should `delete_project` depend on a new tool to preview what's about to be destroyed, or is the existing `get_tasks` (filterable by `project_id`) sufficient for a caller to check first? → A: The existing `get_tasks` tool already covers this; no new tool or FR is needed.
+- Q: Does this feature need to bump the plugin's declared `minSupVersion` and add a runtime capability check for `deleteProject`, or is a version bump alone (documented in the README) sufficient? → A: Bump `plugin/manifest.json`'s `minSupVersion` to cover the SP release that introduced `deleteProject`, and document the new minimum version in `README.md`'s Prerequisites section; no runtime capability check is added.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Delete a project through the MCP server (Priority: P1)
@@ -28,6 +36,7 @@ An AI assistant connected to this MCP server is asked to remove a project (e.g. 
 - Calling `delete_project` twice in a row with the same ID (second call targets an already-deleted project): second call MUST return an error, not a silent success.
 - Calling `delete_project` with an empty or whitespace-only project ID: MUST be rejected before any call reaches Super Productivity, consistent with how `delete_task` and other tools validate IDs.
 - Deleting a project that is the sole project assigned to a long-running recurring task configuration: deletion proceeds; the task repeat configuration's fate follows whatever Super Productivity's own `deleteProject` cascade already does (no new MCP-side logic is introduced to second-guess it).
+- Deleting a project that contains the task currently being time-tracked: deletion proceeds with no special-casing; the native `deleteProject` cascade's handling of the active timer is relied upon as-is, matching the same "don't second-guess the cascade" posture already taken for recurring tasks.
 
 ## Requirements *(mandatory)*
 
@@ -41,6 +50,7 @@ An AI assistant connected to this MCP server is asked to remove a project (e.g. 
 - **FR-006**: On success, `delete_project` MUST return a result indicating the deletion succeeded, following the same minimal success-result shape as `delete_task`.
 - **FR-007**: The underlying plugin bridge (`plugin/plugin.js`) MUST add a command handler that calls Super Productivity's `PluginAPI.deleteProject(projectId)` and surfaces its errors (including the Inbox-deletion refusal) back through the existing IPC response format.
 - **FR-008**: The tool's description text MUST state plainly that this deletes the project AND its contained tasks, so a calling assistant cannot invoke it expecting a "move tasks out first" semantics.
+- **FR-009**: `plugin/manifest.json`'s `minSupVersion` MUST be raised to the Super Productivity release that introduced `deleteProject` (v19.0.1), and `README.md`'s Prerequisites section MUST be updated to state that minimum version. No runtime capability check is required for this feature (unlike the precedent set for habit tools), since the manifest bump is the sole gating mechanism in scope.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -59,6 +69,6 @@ An AI assistant connected to this MCP server is asked to remove a project (e.g. 
 ## Assumptions
 
 - Super Productivity's own `PluginAPI.deleteProject(projectId)` already implements the cascade (project + tasks) and the Inbox-deletion refusal; this feature wires it up and surfaces its results, it does not reimplement that logic.
-- The minimum Super Productivity version already declared in `plugin/manifest.json` may need to be raised to cover the release that introduced `deleteProject` (v19.0.1 per the public changelog); confirming and updating that minimum version is in scope for implementation, not a product decision requiring further clarification.
 - No bulk/multi-project delete is in scope — this mirrors `delete_task` (single ID per call), not `bulk_complete_tasks`.
 - No confirmation/dry-run step is introduced inside the MCP tool itself; the calling assistant is responsible for confirming destructive intent with its own user before invoking `delete_project`, consistent with how `delete_task` already works today.
+- Previewing what a `delete_project` call will destroy is already possible via the existing `get_tasks` tool filtered by `project_id`; no new preview/listing tool is introduced by this feature.

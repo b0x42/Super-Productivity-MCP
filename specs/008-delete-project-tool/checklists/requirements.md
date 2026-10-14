@@ -32,4 +32,5 @@
 ## Notes
 
 - Items marked incomplete require spec updates before `/speckit.clarify` or `/speckit.plan`
-- FR-007 and the plugin-API/version-bump assumption name specific files and a specific SP method/version because they are the mechanism this feature must integrate with, not an implementation choice being made here — treated as acceptable per the mandatory-dependency carve-out, not a quality gap.
+- FR-007 and FR-009 name specific files and a specific SP method/version because they are the mechanism this feature must integrate with, not an implementation choice being made here — treated as acceptable per the mandatory-dependency carve-out, not a quality gap.
+- Re-validated 2026-10-14 after 3 clarification rounds (time-tracked-task cascade, preview-tool scope, minSupVersion/README bump). All items still pass; no regressions.
