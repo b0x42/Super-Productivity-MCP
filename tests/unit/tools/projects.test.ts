@@ -5,7 +5,7 @@ vi.mock('../../../src/ipc/command-sender.js', () => ({
 }));
 
 import { sendCommand } from '../../../src/ipc/command-sender.js';
-import { updateProjectSchema, registerProjectTools } from '../../../src/tools/projects.js';
+import { updateProjectSchema, deleteProjectSchema, registerProjectTools } from '../../../src/tools/projects.js';
 import type { ResolvedDirs } from '../../../src/ipc/directories.js';
 import type { Response } from '../../../src/ipc/types.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -185,6 +185,60 @@ describe('project tool logic', () => {
     it('accepts a call using only documented parameters', () => {
       const result = updateProjectSchema.safeParse({ project_id: 'proj-1', title: 'New Name' });
       expect(result.success).toBe(true);
+    });
+  });
+
+  // T001: delete_project schema
+  describe('delete_project schema', () => {
+    it('accepts a valid project_id', () => {
+      const result = deleteProjectSchema.safeParse({ project_id: 'proj-1' });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects a call missing project_id', () => {
+      const result = deleteProjectSchema.safeParse({});
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects an unrecognized parameter, naming it in the error', () => {
+      const result = deleteProjectSchema.safeParse({ project_id: 'proj-1', confirm: true });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('confirm');
+      }
+    });
+  });
+
+  // T002: delete_project handler (via real registered handler, same pattern as update_project description tests)
+  describe('delete_project (via real handler)', () => {
+    it('rejects an empty project_id without calling sendCommand', async () => {
+      const res = await toolHandlers.get('delete_project')!({ project_id: '' });
+      expect(mockSend).not.toHaveBeenCalled();
+      expect(res).toMatchObject({ isError: true });
+    });
+
+    it('rejects a whitespace-only project_id without calling sendCommand', async () => {
+      const res = await toolHandlers.get('delete_project')!({ project_id: '   ' });
+      expect(mockSend).not.toHaveBeenCalled();
+      expect(res).toMatchObject({ isError: true });
+    });
+
+    it('sends deleteProject with projectId for a valid project_id', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      await toolHandlers.get('delete_project')!({ project_id: 'proj-1' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'deleteProject', { projectId: 'proj-1' });
+    });
+
+    it('returns success on a null-result success response', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse(null));
+      const res = await toolHandlers.get('delete_project')!({ project_id: 'proj-1' });
+      expect(res).toMatchObject({ content: [{ type: 'text', text: JSON.stringify({ success: true }, null, 2) }] });
+    });
+
+    it('passes the plugin error string through unchanged on failure', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Project not found: proj-1', timestamp: Date.now() });
+      const res = await toolHandlers.get('delete_project')!({ project_id: 'proj-1' });
+      expect(res).toMatchObject({ content: [{ type: 'text', text: JSON.stringify({ error: 'Project not found: proj-1' }) }], isError: true });
     });
   });
 });

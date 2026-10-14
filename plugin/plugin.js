@@ -3,7 +3,7 @@ const PROTOCOL_VERSION = 1;
 // Kept in step with plugin/manifest.json by tests/unit/plugin/version.test.ts —
 // this was a literal in the ping handler and check_connection reported 1.6.0
 // from a 1.7.0 plugin for a whole release.
-const PLUGIN_VERSION = '1.6.2';
+const PLUGIN_VERSION = '1.7.0';
 const POLL_INTERVAL_MS = 2000;
 let commandDir = null;
 let responseDir = null;
@@ -579,6 +579,31 @@ async function executeCommand(command) {
           };
         }
         await PluginAPI.deleteTask(command.taskId);
+        result = null;
+        break;
+      }
+      case 'deleteProject': {
+        // The Inbox is a fixed, well-known project (id 'INBOX_PROJECT') that
+        // PluginAPI.deleteProject itself refuses to remove — checking for it here
+        // first means the caller gets a precise, named error instead of depending
+        // on the exact wording of whatever refusal the host throws.
+        if (command.projectId === 'INBOX_PROJECT') {
+          return {
+            success: false,
+            error: 'The Inbox project cannot be deleted.',
+            timestamp: Date.now(),
+          };
+        }
+        const allProjectsForDelete = await PluginAPI.getAllProjects();
+        const projectToDelete = allProjectsForDelete.find(p => p.id === command.projectId);
+        if (!projectToDelete) {
+          return {
+            success: false,
+            error: `Project not found: ${command.projectId}`,
+            timestamp: Date.now(),
+          };
+        }
+        await PluginAPI.deleteProject(command.projectId);
         result = null;
         break;
       }

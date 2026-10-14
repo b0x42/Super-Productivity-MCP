@@ -10,6 +10,8 @@ declare global {
     getTasks: ReturnType<typeof vi.fn>;
     deleteTask?: ReturnType<typeof vi.fn>;
     getArchivedTasks?: ReturnType<typeof vi.fn>;
+    getAllProjects?: ReturnType<typeof vi.fn>;
+    deleteProject?: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -376,5 +378,79 @@ describe('executeCommand: logTimeEntries', () => {
     const res = await logEntries('nope', [{ date: '2026-08-31', durationMs: HOUR }]);
     expect(res.success).toBe(false);
     expect(globalThis.PluginAPI.updateTask).not.toHaveBeenCalled();
+  });
+});
+
+// T003: executeCommand's deleteProject case. Mirrors deleteTask's existence-check
+// precedent (plugin.js), plus the Inbox-specific refusal this feature adds —
+// PluginAPI.deleteProject refuses the Inbox itself, but checking the fixed,
+// well-known 'INBOX_PROJECT' id here first gives a precise, named error instead
+// of depending on the exact wording of whatever the host throws.
+describe('executeCommand: deleteProject', () => {
+  const projects = [{ id: 'proj-1', title: 'Work' }, { id: 'INBOX_PROJECT', title: 'Inbox' }];
+
+  beforeEach(() => {
+    globalThis.PluginAPI = {
+      addTask: vi.fn(),
+      updateTask: vi.fn(),
+      getTasks: vi.fn(),
+      getAllProjects: vi.fn(async () => projects),
+      deleteProject: vi.fn().mockResolvedValue(undefined),
+    };
+  });
+
+  const del = (projectId: string) => executeCommand({ action: 'deleteProject', projectId });
+
+  it('deletes an existing, non-Inbox project', async () => {
+    const res = await del('proj-1');
+    expect(res.success).toBe(true);
+    expect(res.result).toBeNull();
+    expect(globalThis.PluginAPI.deleteProject).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('reports a nonexistent project as not found, without calling deleteProject', async () => {
+    const res = await del('no-such-project');
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('Project not found: no-such-project');
+    expect(globalThis.PluginAPI.deleteProject).not.toHaveBeenCalled();
+  });
+
+  it('refuses to delete the Inbox, without calling deleteProject', async () => {
+    const res = await del('INBOX_PROJECT');
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('The Inbox project cannot be deleted.');
+    expect(globalThis.PluginAPI.deleteProject).not.toHaveBeenCalled();
+  });
+
+  // The Inbox check runs before getAllProjects() is even called (see plugin.js), so the
+  // refusal can never depend on whether the Inbox happens to appear in that list's result —
+  // this proves it holds even in the hypothetical case where it doesn't.
+  it('refuses to delete the Inbox even if getAllProjects() omits it from the list', async () => {
+    globalThis.PluginAPI.getAllProjects = vi.fn(async () => [{ id: 'proj-1', title: 'Work' }]);
+    const res = await del('INBOX_PROJECT');
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('The Inbox project cannot be deleted.');
+    expect(globalThis.PluginAPI.getAllProjects).not.toHaveBeenCalled();
+    expect(globalThis.PluginAPI.deleteProject).not.toHaveBeenCalled();
+  });
+
+  // Unlike tasks (which have a separate getArchivedTasks() because getTasks() excludes
+  // archived ones), Project.isArchived is just a boolean field on the same object
+  // getAllProjects() already returns — there is no separate project archive store to miss,
+  // so an archived project's id is found by the existing lookup like any other.
+  it('deletes an archived project found via getAllProjects(), same as any other', async () => {
+    globalThis.PluginAPI.getAllProjects = vi.fn(async () => [
+      { id: 'proj-1', title: 'Old Project', isArchived: true },
+    ]);
+    const res = await del('proj-1');
+    expect(res.success).toBe(true);
+    expect(globalThis.PluginAPI.deleteProject).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('reports success:false when the host call throws for a valid, non-Inbox project', async () => {
+    globalThis.PluginAPI.deleteProject.mockRejectedValueOnce(new Error('boom'));
+    const res = await del('proj-1');
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('boom');
   });
 });

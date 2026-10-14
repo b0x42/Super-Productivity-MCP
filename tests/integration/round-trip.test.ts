@@ -194,6 +194,63 @@ describe('integration: round-trip', () => {
     expect(res.error).toBe('Habit management requires a newer version of Super Productivity.');
   });
 
+  it('deleteProject → plugin removes it → server gets null result', async () => {
+    const dirs = makeDirs();
+    const stop = simulatePlugin(dirs, (cmd) => {
+      if (cmd.action === 'deleteProject') return null;
+      return null;
+    });
+
+    const res = await sendCommand(dirs, 'deleteProject', { projectId: 'proj-1' }, 5000);
+    stop();
+    expect(res.success).toBe(true);
+    expect(res.result).toBeNull();
+  });
+
+  it('deleteProject on a nonexistent project → clear not-found error, not a silent success', async () => {
+    const dirs = makeDirs();
+    const interval = setInterval(() => {
+      if (!existsSync(dirs.commands)) return;
+      for (const file of readdirSync(dirs.commands).filter(f => f.endsWith('.json'))) {
+        const data = JSON.parse(require('fs').readFileSync(join(dirs.commands, file), 'utf-8'));
+        const response: Response = {
+          success: false,
+          error: `Project not found: ${data.projectId}`,
+          timestamp: Date.now(),
+        };
+        writeFileSync(join(dirs.responses, `${data.id}_response.json`), JSON.stringify(response));
+        require('fs').unlinkSync(join(dirs.commands, file));
+      }
+    }, 100);
+
+    const res = await sendCommand(dirs, 'deleteProject', { projectId: 'no-such-project' }, 5000);
+    clearInterval(interval);
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('Project not found: no-such-project');
+  });
+
+  it('deleteProject on the Inbox → clear refusal, not a crash', async () => {
+    const dirs = makeDirs();
+    const interval = setInterval(() => {
+      if (!existsSync(dirs.commands)) return;
+      for (const file of readdirSync(dirs.commands).filter(f => f.endsWith('.json'))) {
+        const data = JSON.parse(require('fs').readFileSync(join(dirs.commands, file), 'utf-8'));
+        const response: Response = {
+          success: false,
+          error: 'The Inbox project cannot be deleted.',
+          timestamp: Date.now(),
+        };
+        writeFileSync(join(dirs.responses, `${data.id}_response.json`), JSON.stringify(response));
+        require('fs').unlinkSync(join(dirs.commands, file));
+      }
+    }, 100);
+
+    const res = await sendCommand(dirs, 'deleteProject', { projectId: 'INBOX_PROJECT' }, 5000);
+    clearInterval(interval);
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('The Inbox project cannot be deleted.');
+  });
+
   it('stale cleanup removes old files', () => {
     const dirs = makeDirs();
     const stale = join(dirs.commands, 'old_cmd.json');

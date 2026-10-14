@@ -38,6 +38,11 @@ const updateProjectShape = {
 };
 export const updateProjectSchema = z.object(updateProjectShape).strict();
 
+const deleteProjectShape = {
+  project_id: z.string().describe('Project ID to delete. Also deletes all tasks in the project.'),
+};
+export const deleteProjectSchema = z.object(deleteProjectShape).strict();
+
 export function registerProjectTools(server: McpServer, dirs: ResolvedDirs): void {
   server.registerTool('create_project', {
     description:
@@ -87,5 +92,17 @@ export function registerProjectTools(server: McpServer, dirs: ResolvedDirs): voi
     const res = await sendCommand(dirs, 'updateProject', { projectId: project_id, data });
     if (!res.success) return errorResult(res.error ?? 'Failed to update project');
     return okResult(res.result);
+  });
+
+  server.registerTool('delete_project', {
+    description:
+      'Delete a project in Super Productivity. Also permanently deletes all tasks in the ' +
+      'project — this is not reversible, and there is no way to detach tasks first.',
+    inputSchema: deleteProjectSchema,
+  }, async ({ project_id }) => {
+    if (!project_id?.trim()) return errorResult('project_id is required');
+    const res = await sendCommand(dirs, 'deleteProject', { projectId: project_id });
+    if (!res.success) return errorResult(res.error ?? 'Failed to delete project');
+    return okResult({ success: true });
   });
 }

@@ -24,3 +24,16 @@ describe('plugin version', () => {
     expect((res.result as { pluginVersion: string }).pluginVersion).toBe(manifestVersion);
   });
 });
+
+// T004: deleteProject requires PluginAPI.deleteProject, which SP only shipped starting
+// with v19.0.1 — pinning the manifest value here turns an accidental revert into a
+// red test rather than a silent runtime failure for users on older SP builds.
+describe('plugin manifest minSupVersion', () => {
+  const manifest = JSON.parse(
+    readFileSync(fileURLToPath(new URL('../../../plugin/manifest.json', import.meta.url)), 'utf-8'),
+  ) as { minSupVersion: string };
+
+  it('requires at least the SP release that introduced deleteProject', () => {
+    expect(manifest.minSupVersion).toBe('19.0.1');
+  });
+});
