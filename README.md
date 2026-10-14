@@ -127,7 +127,7 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 
 ## Prerequisites
 
-- [Super Productivity](https://super-productivity.com) >= 14.0.0
+- [Super Productivity](https://super-productivity.com) >= 19.0.1
 - Node.js >= 18
 - An MCP-compatible client (Claude Desktop, Kiro, etc.)
 
@@ -155,6 +155,7 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | `get_projects` | List all projects |
 | `create_project` | Create a new project |
 | `update_project` | Update project properties |
+| `delete_project` | Permanently delete a project and all tasks it contains. Cannot delete the Inbox |
 | `get_tags` | List all tags |
 | `create_tag` | Create a new tag |
 | `update_tag` | Update tag properties |
