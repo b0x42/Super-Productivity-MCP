@@ -29,3 +29,9 @@ No `NEEDS CLARIFICATION` markers remain in the Technical Context (all three clar
 **Resolution**: added `"deleteProject"` to `plugin/manifest.json`'s `permissions` array (alongside the existing `"nodeExecution"` and `"showIndexHtmlAsView"`). After rebuilding and reinstalling the plugin, all 11 quickstart.md steps passed as documented.
 
 **Why this wasn't caught earlier**: this is a genuine gap in the available documentation sources, not a research error — the permission requirement only surfaces at runtime from the live plugin host, and no static source (types package, GitHub source, changelog) mentioned it. Recorded here so a future contributor reviewing this feature's research doesn't wonder why `deleteTask`-pattern work alone wasn't sufficient.
+
+## Resolved during review: archived projects need no special handling
+
+A code review raised the question of whether `deleteProject`'s existence check needs an archived-project equivalent of `deleteTask`'s `archivedTaskError()` helper — tasks have that helper specifically because `PluginAPI.getTasks()` excludes archived tasks, so a naive existence check misreports them as "not found".
+
+**Resolution**: no equivalent is needed for projects. Confirmed against the official `Project` type (`@super-productivity/plugin-api`): `isArchived` is a plain boolean field on the same `Project` object `getAllProjects()` already returns — there is no separate project archive store analogous to `getArchivedTasks()`. An archived project's id is found by the existing lookup exactly like any other project's. Verified by test (`tests/unit/plugin/executeCommand.test.ts`, "deletes an archived project found via getAllProjects(), same as any other").

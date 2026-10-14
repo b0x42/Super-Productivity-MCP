@@ -422,6 +422,31 @@ describe('executeCommand: deleteProject', () => {
     expect(globalThis.PluginAPI.deleteProject).not.toHaveBeenCalled();
   });
 
+  // The Inbox check runs before getAllProjects() is even called (see plugin.js), so the
+  // refusal can never depend on whether the Inbox happens to appear in that list's result —
+  // this proves it holds even in the hypothetical case where it doesn't.
+  it('refuses to delete the Inbox even if getAllProjects() omits it from the list', async () => {
+    globalThis.PluginAPI.getAllProjects = vi.fn(async () => [{ id: 'proj-1', title: 'Work' }]);
+    const res = await del('INBOX_PROJECT');
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('The Inbox project cannot be deleted.');
+    expect(globalThis.PluginAPI.getAllProjects).not.toHaveBeenCalled();
+    expect(globalThis.PluginAPI.deleteProject).not.toHaveBeenCalled();
+  });
+
+  // Unlike tasks (which have a separate getArchivedTasks() because getTasks() excludes
+  // archived ones), Project.isArchived is just a boolean field on the same object
+  // getAllProjects() already returns — there is no separate project archive store to miss,
+  // so an archived project's id is found by the existing lookup like any other.
+  it('deletes an archived project found via getAllProjects(), same as any other', async () => {
+    globalThis.PluginAPI.getAllProjects = vi.fn(async () => [
+      { id: 'proj-1', title: 'Old Project', isArchived: true },
+    ]);
+    const res = await del('proj-1');
+    expect(res.success).toBe(true);
+    expect(globalThis.PluginAPI.deleteProject).toHaveBeenCalledWith('proj-1');
+  });
+
   it('reports success:false when the host call throws for a valid, non-Inbox project', async () => {
     globalThis.PluginAPI.deleteProject.mockRejectedValueOnce(new Error('boom'));
     const res = await del('proj-1');
