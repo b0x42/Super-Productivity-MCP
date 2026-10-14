@@ -1,17 +1,16 @@
 {
   "integration": "kiro-cli",
-  "version": "1.1.4.dev0",
-  "installed_at": "2026-10-14T12:56:18.013757+00:00",
+  "version": "0.8.2.dev0",
+  "installed_at": "2026-04-29T09:55:59.548234+00:00",
   "files": {
-    ".kiro/prompts/speckit.analyze.md": "464729cbb7064c971b784890de2c3a8b57594af0fbbe5ce397e770a0a7703f2f",
-    ".kiro/prompts/speckit.clarify.md": "314687b1a97aaba0ec10853a0e117db61300d8361aeeb01ff100031789917d72",
-    ".kiro/prompts/speckit.constitution.md": "05c8e35cdc393af1467b6a2d6694eec7ffdf546575b3219e0eb778ab7c050f1f",
-    ".kiro/prompts/speckit.implement.md": "81b4fd09c66dc38126148db5a03c74fda35cce3e60fb012ac7d6947b06add451",
-    ".kiro/prompts/speckit.converge.md": "383e1bc0f9e947e723cf3df3326cb6aed583841e0c8ef7c9efdb1d0b69d81cf9",
-    ".kiro/prompts/speckit.plan.md": "9667055c6a00688297252693599d807eccbe981feef0e5d4592a18d9a1f81b9d",
-    ".kiro/prompts/speckit.checklist.md": "9af0e3138959b1101f3da7e0c4c62aebc2d49b4320c07e71d63aa28638ce44ff",
-    ".kiro/prompts/speckit.specify.md": "fda354009cf079fcf8719012d2d172e1216e2eeefca90ce254eeed1263b355d9",
-    ".kiro/prompts/speckit.tasks.md": "29774d74d9c0565b38cc6dda3c7007c5250840a2967cf58283c343b6d2057688",
-    ".kiro/prompts/speckit.taskstoissues.md": "852eac1e8e30c278354435d430c745ec0983f1afaf58b11d21942acb24fbfd43"
+    ".kiro/prompts/speckit.analyze.md": "699032fdd49afe31d23c7191f3fe7bcb1d14b081fbc94c2287e6ba3a57574fda",
+    ".kiro/prompts/speckit.checklist.md": "d7d691689fe45427c868dcf18ade4df500f0c742a6c91923fefba405d6466dde",
+    ".kiro/prompts/speckit.clarify.md": "0cc766dcc5cab233ccdf3bc4cfb5759a6d7d1e13e29f611083046f818f5812bb",
+    ".kiro/prompts/speckit.constitution.md": "58d35eb026f56bb7364d91b8b0382d5dd1249ded6c1449a2b69546693afb85f7",
+    ".kiro/prompts/speckit.implement.md": "83628415c86ba487b3a083c7a2c0f016c9073abd02c1c7f4a30cff949b6602c0",
+    ".kiro/prompts/speckit.plan.md": "5b1e9c9b5a26a1877fe3b655a9350562cf5ee88788f9030e6b8a9dc1de88b347",
+    ".kiro/prompts/speckit.specify.md": "5bbb5270836cc9a3286ce3ed96a500f3d383a54abb06aa11b01a2d2f76dbf39b",
+    ".kiro/prompts/speckit.tasks.md": "a58886f29f75e1a14840007772ddd954742aafb3e03d9d1231bee033e6c1626b",
+    ".kiro/prompts/speckit.taskstoissues.md": "e84794f7a839126defb364ca815352c5c2b2d20db2d6da399fa53e4ddbb7b3ee"
   }
 }
