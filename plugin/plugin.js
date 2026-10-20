@@ -3,7 +3,7 @@ const PROTOCOL_VERSION = 1;
 // Kept in step with plugin/manifest.json by tests/unit/plugin/version.test.ts —
 // this was a literal in the ping handler and check_connection reported 1.6.0
 // from a 1.7.0 plugin for a whole release.
-const PLUGIN_VERSION = '1.7.0';
+const PLUGIN_VERSION = '1.7.0-http-1.0.0';
 const POLL_INTERVAL_MS = 2000;
 let commandDir = null;
 let responseDir = null;
@@ -63,7 +63,44 @@ function parseAtDateSyntax(title, now = new Date()) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseAtDateSyntax, executeCommand, PLUGIN_VERSION };
+  module.exports = {
+    parseAtDateSyntax,
+    executeCommand,
+    PLUGIN_VERSION,
+    normalizeHttpSettings,
+    syncHttpConfig,
+    showTokenDialog,
+    buildPanelModel,
+    restartServer,
+    startServerByUser,
+    stopServerByUser,
+    stopManagedServer,
+    // Test seams: the data dir is normally discovered by init() via executeNodeScript, and the
+    // embedded server is filled in by the build.
+    __setCommandDirForTest: (dir) => {
+      commandDir = dir;
+      lastPublishedHttpConfig = null;
+      lastHttpConfigError = null;
+      lastStatusToastKey = null;
+      cachedToken = null;
+      lastPanelBody = null;
+      lastPanelAt = 0;
+      lastControlId = null;
+      controlAck = null;
+      currentHttp = null;
+      serverBundlePath = null;
+      spMainPid = undefined;
+      lastLaunchAt = 0;
+      recentLaunches = [];
+      userStopped = false;
+      launchBlocked = false;
+      externalNoticeShown = false;
+      weMayHaveServer = false;
+      opChain = Promise.resolve();
+      stoppedPids.clear();
+    },
+    __setEmbeddedServerForTest: (e) => { embeddedServer = e; serverBundlePath = null; },
+  };
 }
 
 // Set one or more days in a timeSpentOnDay map and recompute the derived total.
@@ -246,6 +283,839 @@ async function writeResponse(commandId, response) {
     await runWriteStep('append', payload.slice(i, i + chunkSize));
   }
   await runWriteStep('finish');
+}
+
+// ---------------------------------------------------------------------------
+// Streamable HTTP server (specs/009-streamable-http: 009-FR-001 … 009-FR-022)
+//
+// The settings dialog (config-schema.json) is mirrored to http_config.json in the shared data
+// directory; the server follows that file live, so changing a setting never needs a restart.
+// In the other direction the server writes http_status.json (state, errors, a heartbeat), which
+// is how a failure only it can see — a busy port — reaches the user as a toast.
+//
+// The plugin also owns the server process. It ships the server inside this file (EMBEDDED_SERVER,
+// filled in by scripts/build-plugin.mjs), writes it to the data dir, and launches it detached with
+// SP's own Node (process.execPath + ELECTRON_RUN_AS_NODE — plugin scripts get no PATH, so npx or
+// "node" are not an option). Liveness is the status file's heartbeat; the server exits on its own
+// if SP dies (--parent-pid). `super-productivity-mcp --http` still works for running it yourself.
+//
+// Validation mirrors src/http/config.ts; the server re-validates regardless.
+//
+// How SP runs executeNodeScript matters here (electron/plugin-node-executor.ts): a script that
+// matches /require\((?!fs|path|os)|child_process|exec|spawn|eval|Function|process\.exit/ gets a
+// real Node process; every other script runs in a vm sandbox with only fs/path/os and NO `process`.
+// So steady-state polling stays in the cheap sandbox, and scripts that need `process` say
+// `const process = require('process')` — which is also what selects the real-process mode.
+//
+// The bearer token is a credential. The settings dialog saves into SP's synced state (exports,
+// backups, other devices), so it can't take one. The plugin generates the token, keeps it in SP's
+// local-only secret store, and delivers it through the owner-only (0600) http_config.json.
+// ---------------------------------------------------------------------------
+const HTTP_CONFIG_FILENAME = 'http_config.json';
+const HTTP_STATUS_FILENAME = 'http_status.json';
+const HTTP_LOG_FILENAME = 'http_server.log';
+const TOKEN_SECRET_KEY = 'httpToken';
+const TOKEN_RE = /^[\x21-\x7e]{16,256}$/;
+const DEFAULT_HTTP_HOST = '127.0.0.1';
+const DEFAULT_HTTP_PORT = 8765;
+const HOSTNAME_RE = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
+const HTTP_PANEL_FILENAME = 'http_panel.json';     // plugin -> pane: what to show (plain text, no secrets)
+const HTTP_CONTROL_FILENAME = 'http_control.json'; // pane -> plugin: one request, consumed on read
+const PANEL_HEARTBEAT_MS = 10000;                  // rewritten at least this often so the pane can tell the plugin is alive
+const BTN_CLOSE = 'Close';
+const BTN_ROTATE = 'Generate new token';
+const PANEL_NAME = 'SP MCP Server';                // the plugin's sidebar entry, where the controls live
+const HEARTBEAT_FRESH_MS = 20000; // the server rewrites its status every 5s; older than this = not alive
+const LAUNCH_GRACE_MS = 15000;    // time a fresh launch gets to write its first status
+const MAX_LAUNCHES = 3;           // launches within LAUNCH_WINDOW_MS before we stop relaunching
+const LAUNCH_WINDOW_MS = 120000;
+const UPLOAD_CHUNK = 32 * 1024;   // SP caps a script at 100KB; args travel inside it
+
+// Replaced at build time with the gzip+base64 server bundle. Empty in a source checkout, where
+// the plugin publishes settings but leaves launching to a hand-run `super-productivity-mcp --http`.
+const EMBEDDED_SERVER = { sha256: '', gzB64: '' };
+let embeddedServer = EMBEDDED_SERVER;
+
+let lastPublishedHttpConfig = null; // JSON string of what is on disk (includes the token)
+let lastHttpConfigError = null;
+let lastStatusToastKey = null;
+let cachedToken = null;
+let httpSyncInFlight = false;
+let currentHttp = null;             // { config, manage, requireToken, tokenPublished } from the latest sync
+let lastPanelBody = null;
+let lastPanelAt = 0;
+let lastControlId = null;           // a request id is acted on once, even if its file is somehow written again
+let controlAck = null;              // last request id handled; the pane waits for it
+let serverBundlePath = null;
+let spMainPid;                      // undefined = not asked yet, null = could not tell
+let lastLaunchAt = 0;
+let recentLaunches = [];
+let userStopped = false;            // the user pressed Stop: don't relaunch behind their back
+let launchBlocked = false;          // gave up relaunching (crash loop / bundle failure) until the user acts
+let externalNoticeShown = false;
+let weMayHaveServer = false;        // we launched one (or saw ours): worth reading the status file even while HTTP is off
+let opChain = Promise.resolve();    // launching, stopping and restarting never overlap
+const stoppedPids = new Map();      // pid -> when we confirmed it gone: its status file may never say so itself
+
+function serial(fn) {
+  const run = opChain.then(fn, fn);
+  opChain = run.catch(() => {});
+  return run;
+}
+
+function hasEmbeddedServer() {
+  return !!(embeddedServer && embeddedServer.gzB64 && embeddedServer.sha256);
+}
+
+function dataDirOf() {
+  return commandDir ? commandDir.replace(/[\\/][^\\/]*$/, '') : '';
+}
+
+function esc(value) {
+  return String(value).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+function offHttpConfig() {
+  return { enabled: false, host: DEFAULT_HTTP_HOST, port: DEFAULT_HTTP_PORT, allowedHosts: [], allowedOrigins: [] };
+}
+
+function isLoopbackBind(host) {
+  const h = String(host).trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return h === 'localhost' || h === '::1' || /^127(\.\d{1,3}){3}$/.test(h);
+}
+
+function isValidHttpHost(host) {
+  if (HOSTNAME_RE.test(host)) return true; // hostnames and IPv4 literals
+  return /^[0-9a-f:.]+$/i.test(host) && host.split(':').length >= 3; // IPv6 literal
+}
+
+// Canonical form of one allowed-Host entry, or null. Mirrors normalizeAllowedHost in src/http/config.ts.
+function normalizeAllowedHost(raw) {
+  const v = String(raw).trim().toLowerCase();
+  const m = /^(\[[0-9a-f:.]+\]|[^:\[\]]+)(?::(\d{1,5}))?$/.exec(v);
+  if (!m) return null;
+  const name = m[1];
+  const port = m[2];
+  if (name.charAt(0) === '[') {
+    try { new URL('http://' + name + '/'); } catch (e) { return null; } // URL parsing validates IPv6
+  } else if (!HOSTNAME_RE.test(name)) {
+    return null;
+  }
+  if (port !== undefined && (Number(port) < 1 || Number(port) > 65535)) return null;
+  return v;
+}
+
+// Canonical form of one allowed-Origin entry (scheme://host[:port], nothing else), or null.
+// Mirrors normalizeAllowedOrigin in src/http/config.ts.
+function normalizeAllowedOrigin(raw) {
+  let u;
+  try { u = new URL(String(raw).trim()); } catch (e) { return null; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+  if (u.username || u.password || u.search || u.hash || u.pathname !== '/') return null;
+  return u.origin;
+}
+
+// Settings fields are free text: split on commas and whitespace, normalize, de-duplicate.
+function parseSettingList(raw, normalize, errorFor) {
+  if (raw === undefined || raw === null || raw === '') return { list: [] };
+  if (typeof raw !== 'string') return { list: [], error: errorFor(raw) };
+  const out = [];
+  const entries = raw.split(/[\s,]+/).filter(Boolean);
+  for (let i = 0; i < entries.length; i++) {
+    const norm = normalize(entries[i]);
+    if (norm === null) return { list: [], error: errorFor(entries[i]) };
+    if (out.indexOf(norm) === -1) out.push(norm);
+  }
+  return { list: out };
+}
+
+// savedStr is what PluginAPI.loadSyncedData() returns: the settings dialog stores
+// { config: {...}, savedAt } as one JSON string. Anything missing or malformed
+// means "off" — an invalid enabled config fails closed rather than binding to a
+// default the user did not pick.
+//   requireToken: opt-in (off by default; best practice to turn on, especially beyond loopback)
+//   manage:       the plugin starts/stops the server process (on by default)
+function normalizeHttpSettings(savedStr) {
+  const off = offHttpConfig();
+  let cfg = null;
+  if (typeof savedStr === 'string' && savedStr) {
+    try {
+      const parsed = JSON.parse(savedStr);
+      if (parsed && typeof parsed === 'object' && parsed.config && typeof parsed.config === 'object') cfg = parsed.config;
+    } catch (e) { /* unreadable settings = never configured */ }
+  }
+  const requireToken = !!cfg && cfg.httpRequireToken === true;
+  const manage = !cfg || cfg.httpManageProcess !== false;
+  if (!cfg || cfg.httpEnabled !== true) return { config: off, requireToken, manage };
+
+  const rawHost = cfg.httpHost === undefined ? DEFAULT_HTTP_HOST : cfg.httpHost;
+  const host = typeof rawHost === 'string' ? rawHost.trim() : '';
+  if (!host || !isValidHttpHost(host)) {
+    return { config: off, requireToken, manage, error: 'Invalid bind address ' + JSON.stringify(rawHost) + ' — use an IP address or hostname.' };
+  }
+  const port = cfg.httpPort === undefined ? DEFAULT_HTTP_PORT : cfg.httpPort;
+  if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) {
+    return { config: off, requireToken, manage, error: 'Invalid port ' + JSON.stringify(port) + ' — use a whole number from 1 to 65535.' };
+  }
+  const hosts = parseSettingList(cfg.httpAllowedHosts, normalizeAllowedHost, (e) =>
+    'Invalid allowed host ' + JSON.stringify(e) + ' — use a hostname or IP, optionally with :port (IPv6 in [brackets]).');
+  if (hosts.error) return { config: off, requireToken, manage, error: hosts.error };
+  const origins = parseSettingList(cfg.httpAllowedOrigins, normalizeAllowedOrigin, (e) =>
+    'Invalid allowed origin ' + JSON.stringify(e) + ' — use a full origin such as http://console.example.org (no path).');
+  if (origins.error) return { config: off, requireToken, manage, error: origins.error };
+
+  return {
+    config: { enabled: true, host, port, allowedHosts: hosts.list, allowedOrigins: origins.list },
+    requireToken,
+    manage,
+  };
+}
+
+// ---- files shared with the server and the pane ----------------------------
+
+// Write-then-rename so a reader never sees a half-written file. Owner-only.
+async function writeDataFile(name, text) {
+  const result = await PluginAPI.executeNodeScript({
+    script: `
+      const fs = require('fs');
+      const path = require('path');
+      const target = path.join(path.dirname(args[0]), args[1]);
+      const tmp = target + '.' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.tmp';
+      fs.writeFileSync(tmp, args[2], { mode: 0o600 });
+      fs.renameSync(tmp, target);
+      return { success: true };
+    `,
+    args: [commandDir, name, text],
+    timeout: 5000,
+  });
+  assertNodeResult(result, 'write ' + name);
+}
+
+// ---- bearer token ---------------------------------------------------------
+
+async function generateToken() {
+  const result = await PluginAPI.executeNodeScript({
+    script: `return { success: true, token: require('crypto').randomBytes(32).toString('hex') };`,
+    args: [],
+    timeout: 5000,
+  });
+  return assertNodeResult(result, 'generate token').token;
+}
+
+// The token lives in SP's local-only secret store; created on first need (009-FR-012).
+async function ensureToken() {
+  if (cachedToken) return { token: cachedToken, created: false };
+  if (typeof PluginAPI.getSecret !== 'function' || typeof PluginAPI.setSecret !== 'function') {
+    throw new Error('this Super Productivity version has no secret storage');
+  }
+  let token = await PluginAPI.getSecret(TOKEN_SECRET_KEY);
+  let created = false;
+  if (!token || !TOKEN_RE.test(token)) {
+    token = await generateToken();
+    await PluginAPI.setSecret(TOKEN_SECRET_KEY, token);
+    created = true;
+  }
+  cachedToken = token;
+  return { token, created };
+}
+
+async function rotateToken() {
+  const token = await generateToken();
+  await PluginAPI.setSecret(TOKEN_SECRET_KEY, token);
+  cachedToken = token;
+  await syncHttpConfig(); // republish now rather than at the next poll
+}
+
+// Shows the current token (and offers to replace it). Reached from the server dialog and
+// automatically the first time a token is created, since otherwise nobody would see it.
+async function showTokenDialog() {
+  if (typeof PluginAPI.openDialog !== 'function') return;
+  let token = cachedToken;
+  if (!token && typeof PluginAPI.getSecret === 'function') {
+    try { token = await PluginAPI.getSecret(TOKEN_SECRET_KEY); } catch (e) { token = null; }
+  }
+  const body = token
+    ? '<p>Clients of the HTTP server must send this header:</p>' +
+      '<p><code style="user-select:all;word-break:break-all">Authorization: Bearer ' + esc(token) + '</code></p>' +
+      '<p>The token is kept on this device only; it is not synced or included in backups. ' +
+      'You can see, copy or replace it any time in the ' + PANEL_NAME + ' panel. ' +
+      'Generating a new one immediately locks out clients using the old one.</p>'
+    : '<p>No token has been created yet.</p>' +
+      '<p>One is generated the first time you enable the HTTP server with "Require bearer token" on.</p>';
+  const buttons = token ? [{ label: BTN_CLOSE }, { label: BTN_ROTATE, color: 'warn' }] : [{ label: BTN_CLOSE }];
+  const choice = await PluginAPI.openDialog({ title: 'MCP HTTP server token', htmlContent: body, buttons });
+  if (choice === BTN_ROTATE) {
+    await rotateToken();
+    await showTokenDialog();
+  }
+}
+
+// ---- the server process ---------------------------------------------------
+
+// Content-addressed install of the embedded server into <dataDir>/server/ (009-FR-015). The bundle travels in
+// small pieces because SP caps a script at 100KB; the final step verifies the hash before the
+// file gets its real name, so a half-written or tampered file is never one we would run.
+async function ensureServerBundle() {
+  if (serverBundlePath) return serverBundlePath;
+  if (!hasEmbeddedServer()) throw new Error('this build of the plugin has no embedded server');
+  const name = 'sp-mcp-http-' + embeddedServer.sha256.slice(0, 12) + '.mjs';
+
+  const located = assertNodeResult(await PluginAPI.executeNodeScript({
+    script: `
+      const fs = require('fs');
+      const path = require('path');
+      const file = path.join(path.dirname(args[0]), 'server', args[1]);
+      return { success: true, file: file, exists: fs.existsSync(file) };
+    `,
+    args: [commandDir, name],
+    timeout: 5000,
+  }), 'locate server');
+
+  if (!located.exists) {
+    const upload = (op, chunk) =>
+      PluginAPI.executeNodeScript({
+        script: `
+          const fs = require('fs');
+          const path = require('path');
+          const dir = path.join(path.dirname(args[0]), 'server');
+          const tmp = path.join(dir, args[1] + '.b64.tmp');
+          if (args[2] === 'start') {
+            fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+            fs.writeFileSync(tmp, '', { mode: 0o600 });
+          } else {
+            fs.appendFileSync(tmp, args[3], 'utf-8');
+          }
+          return { success: true };
+        `,
+        args: [commandDir, name, op, chunk || ''],
+        timeout: 5000,
+      }).then((r) => { assertNodeResult(r, 'install server ' + op); });
+    await upload('start');
+    const b64 = embeddedServer.gzB64;
+    for (let i = 0; i < b64.length; i += UPLOAD_CHUNK) await upload('append', b64.slice(i, i + UPLOAD_CHUNK));
+    assertNodeResult(await PluginAPI.executeNodeScript({
+      script: `
+        const fs = require('fs');
+        const path = require('path');
+        const zlib = require('zlib');
+        const crypto = require('crypto');
+        const dir = path.join(path.dirname(args[0]), 'server');
+        const tmp = path.join(dir, args[1] + '.b64.tmp');
+        const out = path.join(dir, args[1]);
+        let bundle;
+        try {
+          bundle = zlib.gunzipSync(Buffer.from(fs.readFileSync(tmp, 'utf-8'), 'base64'));
+        } catch (e) {
+          try { fs.unlinkSync(tmp); } catch (e2) {}
+          return { success: false, error: 'embedded server is corrupt: ' + e.message };
+        }
+        const sum = crypto.createHash('sha256').update(bundle).digest('hex');
+        if (sum !== args[2]) {
+          try { fs.unlinkSync(tmp); } catch (e) {}
+          return { success: false, error: 'embedded server failed its integrity check' };
+        }
+        fs.writeFileSync(out + '.tmp', bundle, { mode: 0o600 });
+        fs.renameSync(out + '.tmp', out);
+        fs.unlinkSync(tmp);
+        for (const f of fs.readdirSync(dir)) {
+          if (/^sp-mcp-http-[0-9a-f]+\.mjs$/.test(f) && f !== args[1]) {
+            try { fs.unlinkSync(path.join(dir, f)); } catch (e) {}
+          }
+        }
+        return { success: true };
+      `,
+      args: [commandDir, name, embeddedServer.sha256],
+      timeout: 20000,
+    }), 'install server');
+  }
+  serverBundlePath = located.file;
+  return serverBundlePath;
+}
+
+// Status as the server last wrote it, plus whether that is believable (009-FR-016). "Alive" is the heartbeat,
+// not a pid probe: a pid can be reused by something unrelated, a fresh heartbeat cannot.
+async function readServerState() {
+  const result = await PluginAPI.executeNodeScript({
+    script: `
+      const fs = require('fs');
+      const path = require('path');
+      try {
+        return { success: true, status: JSON.parse(fs.readFileSync(path.join(path.dirname(args[0]), args[1]), 'utf-8')) };
+      } catch (e) {
+        return { success: true, status: null };
+      }
+    `,
+    args: [commandDir, HTTP_STATUS_FILENAME],
+    timeout: 5000,
+  });
+  const r = unwrapNodeResult(result);
+  const status = r && r.success && r.status && typeof r.status === 'object' ? r.status : null;
+  // A server can only write a final "stopped" if it shuts down gracefully; where SIGTERM is a forced
+  // termination (Windows), or after a SIGKILL, the file keeps saying "listening" with a fresh heartbeat. We
+  // confirmed that process gone ourselves, so whatever it last wrote is history. A newer write under the same
+  // pid (a reused pid, a new server) postdates our kill and is believed again.
+  const goneAt = status ? stoppedPids.get(status.pid) : undefined;
+  const stale = goneAt !== undefined && !(status.updatedAt > goneAt);
+  const alive = !!status && !stale && status.state !== 'stopped' && typeof status.updatedAt === 'number' &&
+    Date.now() - status.updatedAt < HEARTBEAT_FRESH_MS;
+  return { status, alive, managed: alive && status.managed === true };
+}
+
+// Which process SP's node scripts are children of, i.e. SP itself. A managed server records the
+// pid it follows; one that follows someone else is a leftover from an earlier SP session.
+async function getSpPid() {
+  if (spMainPid !== undefined) return spMainPid;
+  try {
+    const r = assertNodeResult(await PluginAPI.executeNodeScript({
+      script: `const process = require('process'); return { success: true, ppid: process.ppid };`,
+      args: [],
+      timeout: 5000,
+    }), 'find SP pid');
+    spMainPid = typeof r.ppid === 'number' ? r.ppid : null;
+  } catch (e) {
+    spMainPid = null;
+  }
+  return spMainPid;
+}
+
+async function killServer(pid) {
+  if (typeof pid !== 'number') return;
+  assertNodeResult(await PluginAPI.executeNodeScript({
+    // Only ever called with the pid of a server whose fresh heartbeat says it is ours.
+    script: `
+      const process = require('process');
+      const pid = args[0];
+      if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) return { success: false, error: 'refusing to signal pid ' + pid };
+      try { process.kill(pid, 'SIGTERM'); } catch (e) {
+        if (e.code === 'ESRCH') return { success: true, gone: true };
+        throw e;
+      }
+      for (let i = 0; i < 15; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        try { process.kill(pid, 0); } catch (e) { return { success: true }; }
+      }
+      try { process.kill(pid, 'SIGKILL'); } catch (e) {}
+      return { success: true, forced: true };
+    `,
+    args: [pid],
+    timeout: 15000,
+  }), 'stop server');
+}
+
+// Launch the embedded server detached (009-FR-014), at most MAX_LAUNCHES times per window (009-FR-018).
+function launchServer() {
+  return serial(async () => {
+    const now = Date.now();
+    recentLaunches = recentLaunches.filter((t) => now - t < LAUNCH_WINDOW_MS);
+    if (recentLaunches.length >= MAX_LAUNCHES) {
+      launchBlocked = true;
+      PluginAPI.showSnack({
+        msg: 'The MCP HTTP server keeps stopping, so Super Productivity has stopped relaunching it. ' +
+          'See ' + dataDirOf() + '/' + HTTP_LOG_FILENAME + ', then press "Start" in the ' + PANEL_NAME + ' panel.',
+        type: 'ERROR',
+      });
+      return false;
+    }
+    let bundle;
+    try {
+      bundle = await ensureServerBundle();
+    } catch (e) {
+      launchBlocked = true;
+      PluginAPI.showSnack({ msg: 'Could not install the MCP HTTP server: ' + ((e && e.message) || e), type: 'ERROR' });
+      return false;
+    }
+    const r = assertNodeResult(await PluginAPI.executeNodeScript({
+      script: `
+        const fs = require('fs');
+        const path = require('path');
+        const cp = require('child_process');
+        const bundle = args[0];
+        const dataDir = args[1];
+        const logFile = path.join(dataDir, args[2]);
+        let flag = 'a';
+        try { if (fs.statSync(logFile).size > 524288) flag = 'w'; } catch (e) {}
+        const out = fs.openSync(logFile, flag, 0o600);
+        const env = { ELECTRON_RUN_AS_NODE: '1', NODE_ENV: 'production', SP_MCP_DATA_DIR: dataDir };
+        if (process.platform === 'win32') env.SystemRoot = process.env.SystemRoot || 'C:\\\\Windows';
+        const child = cp.spawn(process.execPath, ['--no-warnings', bundle, '--http', '--parent-pid', String(process.ppid)], {
+          detached: true,
+          stdio: ['ignore', out, out],
+          windowsHide: true,
+          env: env,
+        });
+        child.on('error', () => {});
+        child.unref();
+        fs.closeSync(out);
+        return { success: true, pid: child.pid, parentPid: process.ppid };
+      `,
+      args: [bundle, dataDirOf(), HTTP_LOG_FILENAME],
+      timeout: 10000,
+    }), 'start server');
+    lastLaunchAt = now;
+    recentLaunches.push(now);
+    weMayHaveServer = true;
+    if (spMainPid === undefined && typeof r.parentPid === 'number') spMainPid = r.parentPid;
+    return true;
+  });
+}
+
+function stopServerProcess(srv) {
+  return serial(async () => {
+    if (!srv.managed) return;
+    await killServer(srv.status.pid);
+    const now = Date.now();
+    stoppedPids.set(srv.status.pid, now);
+    for (const [pid, at] of stoppedPids) if (now - at > 5 * 60 * 1000) stoppedPids.delete(pid);
+    lastLaunchAt = 0; // what we launched is gone, so there is nothing left to wait for before the next launch
+  });
+}
+
+// What to do about the process on every poll (009-FR-014, 009-FR-016 … 009-FR-018). Settings are already published by now, so a fresh
+// server starts with them; later settings changes reach it through the file, no restart needed.
+async function reconcileProcess(config, srv) {
+  if (!config.enabled) {
+    userStopped = false;
+    launchBlocked = false;
+    externalNoticeShown = false;
+    if (srv.managed) {
+      await stopServerProcess(srv);
+      weMayHaveServer = false;
+    } else if (!srv.alive && Date.now() - lastLaunchAt >= LAUNCH_GRACE_MS) {
+      weMayHaveServer = false; // nothing there, and nothing still starting up
+    }
+    return;
+  }
+  if (userStopped || launchBlocked) return;
+  if (srv.alive && !srv.managed) {
+    if (!externalNoticeShown) {
+      externalNoticeShown = true;
+      PluginAPI.showSnack({
+        msg: 'An MCP HTTP server is already running outside Super Productivity (pid ' + srv.status.pid + '), so none was started. ' +
+          'It follows these settings; Super Productivity cannot restart it.',
+        type: 'INFO',
+      });
+    }
+    return;
+  }
+  if (srv.managed) {
+    weMayHaveServer = true;
+    const sp = await getSpPid();
+    if (sp === null || srv.status.parentPid === sp) return; // running, and ours
+    await stopServerProcess(srv);                           // a leftover from an earlier SP session
+  } else if (Date.now() - lastLaunchAt < LAUNCH_GRACE_MS) {
+    return;                                                 // launched moments ago; give it time to report in
+  }
+  await launchServer();
+}
+
+// A bind failure only the server can see (009-FR-020). Reported once, and only after it has stopped trying.
+async function reportBindFailure(config, status) {
+  if (!status || status.state !== 'bind-failed' || !status.error) return;
+  if (status.host !== config.host || status.port !== config.port) return;
+  if (typeof status.updatedAt === 'number' && status.updatedAt < lastLaunchAt) return; // from before our latest (re)launch
+  const key = lastPublishedHttpConfig + '|' + status.error;
+  if (key === lastStatusToastKey) return;
+  lastStatusToastKey = key;
+  const controlled = currentHttp && currentHttp.manage && hasEmbeddedServer();
+  PluginAPI.showSnack({
+    msg: 'MCP HTTP server could not listen on ' + config.host + ':' + config.port + ' after ' + (status.maxAttempts || status.attempt || 3) +
+      ' attempts — ' + status.error + '. It has stopped trying. Free the port or pick another in the plugin settings, then ' +
+      (controlled ? 'press "Restart" in the ' + PANEL_NAME + ' panel.' : 'restart the server yourself.'),
+    type: 'ERROR',
+  });
+}
+
+function resetLaunchState() {
+  launchBlocked = false;
+  recentLaunches = [];
+  lastLaunchAt = 0;
+  lastStatusToastKey = null;
+  externalNoticeShown = false;
+}
+
+// ---- actions behind the pane's buttons -------------------------------------
+
+function canControl() {
+  if (!currentHttp || !currentHttp.config.enabled) {
+    PluginAPI.showSnack({ msg: 'Enable the HTTP server in the plugin settings first.', type: 'WARNING' });
+    return false;
+  }
+  if (!currentHttp.manage || !hasEmbeddedServer()) {
+    PluginAPI.showSnack({
+      msg: 'The server runs outside Super Productivity, so it cannot be controlled from here. ' +
+        'Restart it yourself, or switch the HTTP option off and on again in the plugin settings to make it retry binding.',
+      type: 'INFO',
+    });
+    return false;
+  }
+  return true;
+}
+
+async function restartServer() {
+  if (!canControl()) return;
+  userStopped = false;
+  resetLaunchState();
+  const srv = await readServerState();
+  if (srv.alive && !srv.managed) { await reconcileProcess(currentHttp.config, srv); return; }
+  if (srv.managed) await stopServerProcess(srv);
+  if (await launchServer()) PluginAPI.showSnack({ msg: 'Restarting the MCP HTTP server…', type: 'INFO' });
+}
+
+async function startServerByUser() {
+  if (!canControl()) return;
+  userStopped = false;
+  resetLaunchState();
+  const srv = await readServerState();
+  if (srv.alive) { await reconcileProcess(currentHttp.config, srv); return; }
+  if (await launchServer()) PluginAPI.showSnack({ msg: 'Starting the MCP HTTP server…', type: 'INFO' });
+}
+
+async function stopServerByUser() {
+  if (!canControl()) return;
+  userStopped = true; // sticks until the user starts it again or switches HTTP off and on
+  const srv = await readServerState();
+  if (srv.managed) await stopServerProcess(srv);
+  PluginAPI.showSnack({ msg: 'Stopped the MCP HTTP server.', type: 'INFO' });
+}
+
+// Plugin unload (disabled, replaced, SP shutting down): don't leave our server behind.
+async function stopManagedServer() {
+  if (!commandDir) return;
+  const srv = await readServerState();
+  if (srv.managed) await stopServerProcess(srv);
+}
+
+// What the pane shows (009-FR-019, 009-FR-022). Plain text (the pane uses textContent, so nothing here is escaped) and no
+// secrets: the token is only described, never included. `controls` says which buttons make sense.
+function buildPanelModel(cur, srv) {
+  const st = srv.status || {};
+  const bind = st.host && st.port ? st.host + ':' + st.port : '';
+  const none = { restart: false, stop: false, start: false };
+  const out = {
+    tone: 'idle', headline: '', detail: '', url: null, pid: null, controls: none,
+    token: { required: !!cur.requireToken, present: !!cur.tokenPublished },
+    ack: controlAck,
+  };
+
+  if (!cur.config.enabled) {
+    out.headline = 'Off';
+    out.detail = 'The HTTP server is switched off in the plugin settings.';
+    return out;
+  }
+  if (srv.alive && !srv.managed) {
+    out.tone = st.state === 'listening' ? 'ok' : 'warn';
+    out.headline = 'Running outside Super Productivity';
+    out.detail = 'Started by hand or by another tool (pid ' + st.pid + '); it follows the plugin settings, ' +
+      'but Super Productivity cannot restart it.' + (st.state === 'listening' ? ' Listening on http://' + bind + '/mcp.' : '');
+    out.url = st.state === 'listening' ? 'http://' + bind + '/mcp' : null;
+    out.pid = st.pid;
+    return out;
+  }
+  if (srv.managed) {
+    out.pid = st.pid;
+    out.controls = { restart: true, stop: true, start: false };
+    const owner = 'Started and managed by Super Productivity (pid ' + st.pid + ').';
+    if (st.state === 'listening') {
+      out.tone = 'ok';
+      out.url = 'http://' + bind + '/mcp';
+      out.headline = 'Listening on ' + out.url;
+      out.detail = owner;
+    } else if (st.state === 'retrying') {
+      out.tone = 'warn';
+      out.headline = 'Port busy — retrying';
+      out.detail = 'Attempt ' + st.attempt + ' of ' + st.maxAttempts + ' on ' + bind + ': ' + st.error + '. ' + owner;
+    } else if (st.state === 'bind-failed') {
+      out.tone = 'error';
+      out.headline = 'Could not listen on ' + bind;
+      out.detail = 'Gave up after ' + (st.maxAttempts || st.attempt) + ' attempts: ' + st.error +
+        '. Free the port or change it in the settings, then restart. ' + owner;
+    } else if (st.state === 'invalid-config') {
+      out.tone = 'error';
+      out.headline = 'The server rejected its settings';
+      out.detail = String(st.error) + ' ' + owner;
+    } else {
+      out.tone = 'warn';
+      out.headline = 'Running, but not listening';
+      out.detail = 'State: ' + st.state + '. ' + owner;
+    }
+    return out;
+  }
+  if (!hasEmbeddedServer() && cur.manage) {
+    out.headline = 'Not running';
+    out.detail = 'This build of the plugin has no embedded server. Run "super-productivity-mcp --http" yourself.';
+    return out;
+  }
+  if (!cur.manage) {
+    out.headline = 'Not running';
+    out.detail = 'Process management is switched off, so run "super-productivity-mcp --http" yourself.';
+    return out;
+  }
+  if (userStopped) {
+    out.headline = 'Stopped';
+    out.detail = 'You stopped it. It stays stopped until you start it again.';
+    out.controls = { restart: false, stop: false, start: true };
+    return out;
+  }
+  if (launchBlocked) {
+    out.tone = 'error';
+    out.headline = 'Keeps stopping';
+    out.detail = 'It is no longer being relaunched. See ' + dataDirOf() + '/' + HTTP_LOG_FILENAME + ', then start it again.';
+    out.controls = { restart: false, stop: false, start: true };
+    return out;
+  }
+  if (Date.now() - lastLaunchAt < LAUNCH_GRACE_MS) {
+    out.tone = 'warn';
+    out.headline = 'Starting…';
+    out.detail = 'The server was just launched.';
+    return out; // no controls: a second launch now would race the first
+  }
+  out.headline = 'Not running';
+  out.detail = 'It will be started shortly.';
+  out.controls = { restart: false, stop: false, start: true };
+  return out;
+}
+
+// Publish the panel model for the pane. Only when it changes, plus a heartbeat so a pane that sees
+// an old updatedAt knows the plugin itself has stopped.
+async function publishPanel(srv) {
+  if (!currentHttp) return;
+  const model = buildPanelModel(currentHttp, srv);
+  const body = JSON.stringify(model);
+  const now = Date.now();
+  if (body === lastPanelBody && now - lastPanelAt < PANEL_HEARTBEAT_MS) return;
+  await writeDataFile(HTTP_PANEL_FILENAME, JSON.stringify(Object.assign({ version: 1, updatedAt: now }, model)));
+  lastPanelBody = body;
+  lastPanelAt = now;
+}
+
+// The pane asks for things by dropping a request file (009-FR-022): its iframe can't reach plugin.js directly
+// or read secrets. Consumed on read; an id is acted on once; anything malformed is discarded.
+async function takeControlRequest() {
+  const result = await PluginAPI.executeNodeScript({
+    script: `
+      const fs = require('fs');
+      const path = require('path');
+      const file = path.join(path.dirname(args[0]), args[1]);
+      let text = null;
+      try { text = fs.readFileSync(file, 'utf-8'); } catch (e) { return { success: true, text: null }; }
+      try { fs.unlinkSync(file); } catch (e) {}
+      return { success: true, text: text };
+    `,
+    args: [commandDir, HTTP_CONTROL_FILENAME],
+    timeout: 5000,
+  });
+  const r = unwrapNodeResult(result);
+  if (!r || !r.success || typeof r.text !== 'string') return null;
+  let req;
+  try { req = JSON.parse(r.text); } catch (e) { return null; }
+  if (!req || typeof req !== 'object' || typeof req.id !== 'string' || !req.id || req.id.length > 64) return null;
+  return req;
+}
+
+async function handleControlRequest() {
+  const req = await takeControlRequest();
+  if (!req || req.id === lastControlId) return;
+  lastControlId = req.id;
+  try {
+    if (req.action === 'restart') await restartServer();
+    else if (req.action === 'stop') await stopServerByUser();
+    else if (req.action === 'start') await startServerByUser();
+    else if (req.action === 'rotate-token') {
+      if (currentHttp && currentHttp.requireToken) await rotateToken();
+      else PluginAPI.showSnack({ msg: 'Switch on "Require bearer token" in the plugin settings first.', type: 'INFO' });
+    }
+  } catch (e) {
+    console.error('Control request failed:', e && e.message ? e.message : e);
+    PluginAPI.showSnack({ msg: 'That did not work: ' + ((e && e.message) || e), type: 'ERROR' });
+  }
+  controlAck = req.id; // even for an unknown action, so the pane stops waiting
+}
+
+// ---- the poll -------------------------------------------------------------
+
+// Called from the poll loop. Cheap when nothing changed: one settings read and a string compare
+// (plus one status read while the server is, or may be, running). Never throws — a settings
+// hiccup must not stall command polling.
+async function syncHttpConfig() {
+  if (!commandDir || httpSyncInFlight) return;
+  httpSyncInFlight = true;
+  try {
+    // Requests from the pane first, so what they change (e.g. a new token) is published in this same pass.
+    await handleControlRequest();
+    const normalized = normalizeHttpSettings(await PluginAPI.loadSyncedData());
+    let config = normalized.config;
+    let error = normalized.error;
+    let token = null;
+    let tokenCreated = false;
+
+    if (config.enabled && normalized.requireToken) {
+      try {
+        const t = await ensureToken();
+        token = t.token;
+        tokenCreated = t.created;
+      } catch (e) {
+        // Fail closed: "token required" must never silently become "no token".
+        config = offHttpConfig();
+        error = 'Could not get a bearer token (' + ((e && e.message) || e) + '). ' +
+          'Update Super Productivity, or switch off "Require bearer token".';
+      }
+    }
+
+    if (error && error !== lastHttpConfigError) {
+      PluginAPI.showSnack({ msg: 'MCP HTTP server stays off: ' + error, type: 'ERROR' });
+    }
+    lastHttpConfigError = error || null;
+
+    const managed = normalized.manage && hasEmbeddedServer();
+    if (normalized.manage && config.enabled && !hasEmbeddedServer()) {
+      console.warn('This plugin build has no embedded MCP server; run "super-productivity-mcp --http" yourself.');
+    }
+
+    const payload = JSON.stringify(token ? Object.assign({}, config, { token }) : config);
+    if (payload !== lastPublishedHttpConfig) {
+      await writeDataFile(HTTP_CONFIG_FILENAME, payload);
+
+      const previous = lastPublishedHttpConfig === null ? null : JSON.parse(lastPublishedHttpConfig);
+      lastPublishedHttpConfig = payload;
+      // Any settings change is a fresh start for relaunch attempts; switching on also clears a manual Stop.
+      if (previous) {
+        launchBlocked = false;
+        recentLaunches = [];
+        lastStatusToastKey = null;
+        if (config.enabled && !previous.enabled) userStopped = false;
+      }
+      // Only announce a user-driven switch-on, not the state we find at startup.
+      if (config.enabled && previous && !previous.enabled && !managed) {
+        PluginAPI.showSnack({
+          msg: 'MCP HTTP enabled for ' + config.host + ':' + config.port + '. Run "super-productivity-mcp --http" to serve it.',
+          type: 'INFO',
+        });
+      }
+      if (config.enabled && !token && !isLoopbackBind(config.host)) {
+        PluginAPI.showSnack({
+          msg: 'The MCP HTTP server is open to your network without a bearer token: anyone who can reach ' + config.host + ':' + config.port +
+            ' can read and change your tasks. Requiring a token is best practice — switch on "Require bearer token" in the plugin settings.',
+          type: 'WARNING',
+        });
+      }
+    }
+    currentHttp = { config, manage: normalized.manage, requireToken: normalized.requireToken, tokenPublished: token !== null };
+    if (tokenCreated) void showTokenDialog().catch((e) => { console.error('Token dialog failed:', e); });
+
+    let srv = { status: null, alive: false, managed: false };
+    if (config.enabled || weMayHaveServer) {
+      srv = await readServerState();
+      if (config.enabled) await reportBindFailure(config, srv.status);
+      if (managed) await reconcileProcess(config, srv);
+    }
+    await publishPanel(srv);
+  } catch (e) {
+    console.error('syncHttpConfig failed:', e && e.message ? e.message : e);
+  } finally {
+    httpSyncInFlight = false;
+  }
 }
 
 async function deleteFile(filePath) {
@@ -739,6 +1609,7 @@ async function executeCommand(command) {
 
 async function pollCommands() {
   if (!commandDir) return;
+  void syncHttpConfig();
   try {
     const result = await PluginAPI.executeNodeScript({
       script: `
@@ -811,6 +1682,13 @@ async function init() {
     args: [commandDir, responseDir],
     timeout: 5000,
   });
+  if (typeof PluginAPI.onUnload === 'function') {
+    PluginAPI.onUnload(async () => {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      try { await stopManagedServer(); } catch (e) { console.error('Stopping the MCP HTTP server failed:', e); }
+    });
+  }
+  await syncHttpConfig();
   pollTimer = setInterval(pollCommands, POLL_INTERVAL_MS);
   console.log('MCP Bridge Plugin initialized', { commandDir, responseDir });
 }

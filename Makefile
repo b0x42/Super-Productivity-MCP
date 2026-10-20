@@ -27,10 +27,15 @@ build: dist/index.js dist/plugin.zip
 dist/index.js: $(SERVER_SRC) tsup.config.ts tsconfig.json | node_modules
 	npm run build:server
 
+## Self-contained server (all dependencies bundled), embedded into plugin.js
+## so the plugin can launch it without npx or a separate install.
+dist/server-http.mjs: $(SERVER_SRC) tsup.embedded.config.ts tsconfig.json | node_modules
+	npm run build:embedded
+
 ## SP plugin bundle. The pane's JS is inlined into index.html by the build
 ## script — SP serves only index.html to the iframe, so a separate .js file
 ## in the zip is never fetched.
-dist/plugin.zip: $(PLUGIN_SRC) | node_modules
+dist/plugin.zip: $(PLUGIN_SRC) dist/server-http.mjs | node_modules
 	npm run build:plugin
 
 ## npm ci is driven by the lockfile; touch so make sees the dir as up to date
