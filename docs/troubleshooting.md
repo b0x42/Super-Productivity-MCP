@@ -12,6 +12,28 @@ If the connection check fails after a fresh install or reboot, toggle the plugin
 4. If paths differ between server and plugin, set `SP_MCP_DATA_DIR` (see below)
 5. Restart both SP and your MCP client
 
+## Streamable HTTP Not Listening
+
+See the [Streamable HTTP guide](streamable-http.md) for how it works.
+
+Open the plugin's page in Super Productivity (the **SP MCP Server** sidebar entry) first — the **MCP HTTP server** panel at the top says what the server is doing and why.
+
+1. **Enable Streamable HTTP server** must be ticked in the plugin settings (Settings → Plugins → SP MCP Server → ⚙) and saved. Off by default.
+2. **Not running / keeps stopping.** The plugin launches the server itself (unless *Start and stop the server from Super Productivity* is off). Its output is in `http_server.log` in the data directory; `debug_directories` shows where that is. After 3 launches in 2 minutes the plugin stops relaunching and tells you; fix the cause, then press **Start**.
+3. **Port in use.** The server tries 3 times, 5 seconds apart, then reports the error and stops trying. Free the port or choose another in the settings, then press **Restart** (changing a setting, or unticking and re-ticking the option, also retries).
+4. **Invalid settings.** A bad address, port, allowed host or allowed origin keeps the server off and shows an error toast.
+5. **You run `--http` yourself** (option 'Start and stop…' off): check its stderr for `listening on http://…/mcp`, `closed (…)`, or why it refused. The plugin and that process must share a data directory — `http_config.json` is written there; set `SP_MCP_DATA_DIR` on both sides if they differ (WSL, containers).
+
+**Requests are refused.**
+
+| Response | Cause |
+|---|---|
+| `401` | Missing or wrong `Authorization: Bearer …`. View the token in the panel's token row (**Show** / **Copy**). |
+| `403` "invalid Host header" | The `Host` isn't `localhost`/`127.0.0.1`/`[::1]` or in *Allowed hosts*. Behind a proxy or on a LAN, add the name clients use. |
+| `403` "Origin not allowed" | A browser sent an `Origin` that isn't allowed: add it to *Allowed origins* (full origin, e.g. `http://console.example.org`, no path). On a local bind this only happens once the list is non-empty; pages on `localhost` are always accepted there. |
+| `405` | Only `POST /mcp` is served. |
+| `413` | Body over 1 MiB. |
+
 ## macOS — Sandbox Path Mismatch
 
 Super Productivity can use two different shared-data locations on macOS. Native `.app` installs use the normal Application Support path; Mac App Store installs use the container path. The plugin prefers the native path and falls back to the container path, but the MCP server and plugin must ultimately use the same directory:

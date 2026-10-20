@@ -12,7 +12,7 @@ describe('readPackageVersion', () => {
     expect(readPackageVersion()).toBe(expected);
   });
 
-  it('reports a real semver, not a placeholder', () => {
-    expect(readPackageVersion()).toMatch(/^\d+\.\d+\.\d+$/);
+  it('reports a real semver (pre-release suffix allowed), not a placeholder', () => {
+    expect(readPackageVersion()).toMatch(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/);
   });
 });

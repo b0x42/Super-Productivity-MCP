@@ -1,0 +1,46 @@
+{
+  "type": "object",
+  "properties": {
+    "httpEnabled": {
+      "type": "boolean",
+      "title": "Enable Streamable HTTP server",
+      "description": "Serve MCP over HTTP at http://<address>:<port>/mcp, in addition to stdio. Off by default.",
+      "default": false
+    },
+    "httpHost": {
+      "type": "string",
+      "title": "Bind address",
+      "description": "127.0.0.1 accepts local connections only. 0.0.0.0 accepts connections from your network.",
+      "default": "127.0.0.1"
+    },
+    "httpPort": {
+      "type": "integer",
+      "title": "Port",
+      "minimum": 1,
+      "maximum": 65535,
+      "default": 8765
+    },
+    "httpManageProcess": {
+      "type": "boolean",
+      "title": "Start and stop the server from Super Productivity",
+      "description": "On: enabling the server here launches it (and stops it when disabled); use the buttons in the plugin's page (the 'MCP HTTP server' panel) to restart it. Off: you run 'super-productivity-mcp --http' yourself, e.g. in a container or on another machine, and it follows these settings.",
+      "default": true
+    },
+    "httpRequireToken": {
+      "type": "boolean",
+      "title": "Require bearer token",
+      "description": "Clients must send 'Authorization: Bearer <token>'. Not required by default, but it is best practice — strongly recommended whenever the bind address is anything other than 127.0.0.1. The token is generated for you and kept on this device only (never synced); view, copy or replace it in the plugin's 'MCP HTTP server' panel.",
+      "default": false
+    },
+    "httpAllowedHosts": {
+      "type": "string",
+      "title": "Allowed hosts",
+      "description": "Accepted values of the request's Host header, separated by commas or spaces. Example: console.example.org, 10.0.0.5:8765. A name without a port matches any port. Set this when binding to anything other than 127.0.0.1; localhost names are always accepted on a local bind."
+    },
+    "httpAllowedOrigins": {
+      "type": "string",
+      "title": "Allowed origins",
+      "description": "Browser pages allowed to call the server, as full origins separated by commas or spaces. Example: http://console.example.org. On a local (127.0.0.1) bind this is optional and pages served from localhost are always accepted; on any other bind, requests carrying an Origin header that is not listed are refused. Clients that are not browsers send no Origin and are unaffected."
+    }
+  }
+}

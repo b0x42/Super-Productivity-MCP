@@ -7,12 +7,12 @@
 <style>
   :root {
     --bg: #fff; --fg: #1a1a1a; --muted: #6b7280; --line: #e5e7eb;
-    --ok: #059669; --err: #dc2626; --err-bg: #fef2f2; --code-bg: #f6f7f9;
+    --ok: #059669; --warn: #d97706; --err: #dc2626; --err-bg: #fef2f2; --code-bg: #f6f7f9;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #1e1e1e; --fg: #e6e6e6; --muted: #9ca3af; --line: #333;
-      --ok: #34d399; --err: #f87171; --err-bg: #2a1416; --code-bg: #262626;
+      --ok: #34d399; --warn: #fbbf24; --err: #f87171; --err-bg: #2a1416; --code-bg: #262626;
     }
   }
   * { box-sizing: border-box; }
@@ -45,11 +45,30 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
     overflow-x: auto; white-space: pre; max-height: 320px;
   }
+  /* Server panel */
+  #server { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin-bottom: 16px; }
+  #server.stale { opacity: .7; }
+  .srv-head { display: flex; align-items: center; gap: 8px; }
+  .srv-title { font-weight: 600; }
+  .srv-headline { overflow-wrap: anywhere; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.error { background: var(--err); }
+  .srv-detail { margin: 6px 0 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .srv-note { margin: 6px 0 0; font-size: 12px; }
+  .srv-actions, .srv-token { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+  .srv-token-label { font-size: 12px; color: var(--muted); }
+  code.token { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--code-bg); padding: 2px 6px; border-radius: 4px; user-select: all; overflow-wrap: anywhere; }
+  .btn { font: inherit; padding: 3px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--code-bg); color: inherit; cursor: pointer; }
+  .btn:hover:not(:disabled) { border-color: var(--muted); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.warn { color: var(--err); }
   .empty { color: var(--muted); padding: 24px 4px; text-align: center; }
   .empty.error { color: var(--err); }
 </style>
 </head>
 <body>
+  <!-- Filled in by dashboard.js from the plugin's published state; hidden until there is some. -->
+  <section id="server" hidden></section>
   <header>
     <h1>Tool calls</h1>
     <span id="status"></span>

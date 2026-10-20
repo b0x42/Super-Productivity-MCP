@@ -1,6 +1,6 @@
 {
   "name": "super-productivity-mcp",
-  "version": "1.7.0",
+  "version": "1.7.0-http-1.0.0",
   "description": "MCP server for Super Productivity — manage tasks, projects, and tags via AI assistants",
   "main": "dist/index.js",
   "bin": {
@@ -8,8 +8,9 @@
   },
   "type": "module",
   "scripts": {
-    "build": "tsup && npm run build:plugin",
+    "build": "tsup && npm run build:embedded && npm run build:plugin",
     "build:server": "tsup",
+    "build:embedded": "tsup --config tsup.embedded.config.ts",
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -20,6 +21,7 @@
   },
   "files": [
     "dist",
+    "!dist/server-http.mjs",
     "README.md",
     "LICENSE"
   ],
@@ -51,6 +53,7 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.0.0",
     "eslint": "^10.2.1",
+    "jsdom": "^29.1.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.0",

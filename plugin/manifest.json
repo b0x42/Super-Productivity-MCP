@@ -2,7 +2,7 @@
   "id": "super-productivity-mcp",
   "name": "SP MCP Server",
   "description": "MCP server bridge for AI assistant integration with Super Productivity",
-  "version": "1.7.0",
+  "version": "1.7.0-http-1.0.0",
   "manifestVersion": 1,
   "minSupVersion": "19.0.1",
   "permissions": [
@@ -19,6 +19,7 @@
   "iFrame": true,
   "isSkipMenuEntry": false,
   "icon": "icon.svg",
+  "jsonSchemaCfg": "config-schema.json",
   "categories": [
     "integration",
     "automation"

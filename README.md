@@ -125,6 +125,32 @@ Then run the server directly with `node`:
 
 The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm run build`.
 
+## Streamable HTTP (optional)
+
+By default the server speaks MCP over stdio — your client spawns it. Super Productivity can instead run **one long-lived server** that several clients (or other machines and containers) connect to over Streamable HTTP. It is **off by default**.
+
+Open **Settings → Plugins → SP MCP Server → ⚙** and tick **Enable Streamable HTTP server**. The plugin starts the server — there is nothing else to install — and stops it when you untick. Then point a client at `http://127.0.0.1:8765/mcp`:
+
+```json
+{ "mcpServers": { "super-productivity": { "type": "http", "url": "http://127.0.0.1:8765/mcp" } } }
+```
+
+| Setting | Default |
+|---|---|
+| Enable Streamable HTTP server | off |
+| Bind address | `127.0.0.1` (this machine only) |
+| Port | `8765` |
+| Start and stop the server from Super Productivity | on |
+| Require bearer token | off — best practice; recommended beyond `127.0.0.1` |
+| Allowed hosts / Allowed origins | empty |
+
+- **Manage it from the plugin's page.** An **MCP HTTP server** panel above the tool calls shows what the server is doing and has **Restart**, **Stop**/**Start** and, when a token is required, the token (**Show**, **Copy**, **New token**).
+- **A busy port** is tried 3 times, 5 seconds apart; then the error is reported and the server stops trying. Free the port and press **Restart**.
+- **Bad settings** keep the server off and show an error toast; nothing falls back to a default.
+- **The endpoint can read and change all your tasks.** It binds to `127.0.0.1` by default; before binding to a network address, require a token and set allowed hosts and origins.
+
+→ [Full guide: settings, security, the bearer token, running it yourself](docs/streamable-http.md)
+
 ## Prerequisites
 
 - [Super Productivity](https://super-productivity.com) >= 19.0.1
@@ -213,6 +239,8 @@ The plugin adds a **MCP Bridge** pane to Super Productivity's menu listing what
 the assistant has done — one row per tool call with the time, tool name,
 duration, and whether it succeeded. Click a row to see the arguments it was
 called with and the result it returned; failures show the error message.
+The [Streamable HTTP server panel](docs/streamable-http.md#managing-the-server)
+sits above the list on the same page.
 
 The server writes each call to `tool-calls.jsonl` in the same data directory it
 uses for IPC (`debug_directories` shows the path). The log keeps the most recent
