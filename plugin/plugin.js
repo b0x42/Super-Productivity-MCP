@@ -460,7 +460,8 @@ async function executeCommand(command) {
           if (!inRegular && !inBacklogList) {
             return fail(`Task ${id} is in neither the regular list nor the backlog of project ${project.id}`);
           }
-          const alreadyThere = destination === 'backlog' ? inBacklogList : inRegular && !inBacklogList;
+          // A task in both lists (left by the old reorder_tasks bug) is not "already there": the move repairs it.
+          const alreadyThere = destination === 'backlog' ? inBacklogList && !inRegular : inRegular && !inBacklogList;
           if (alreadyThere) {
             unchanged.push(id);
             continue;

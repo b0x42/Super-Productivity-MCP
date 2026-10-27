@@ -95,6 +95,24 @@ describe('moveTasksBacklog: moving', () => {
   });
 });
 
+describe('moveTasksBacklog: task in both lists', () => {
+  beforeEach(() => {
+    projects = [proj('p1', ['a', 'b'], ['b', 'c'])];
+  });
+
+  it('repairs a task that is in both lists when moving to the backlog', async () => {
+    const res = await move(['b'], 'backlog');
+    expect(res.result).toEqual({ moved: ['b'], unchanged: [] });
+    expect(written('p1')).toEqual({ taskIds: ['a'], backlogTaskIds: ['c', 'b'] });
+  });
+
+  it('repairs a task that is in both lists when moving to the regular list', async () => {
+    const res = await move(['b'], 'regular');
+    expect(res.result).toEqual({ moved: ['b'], unchanged: [] });
+    expect(written('p1')).toEqual({ taskIds: ['a', 'b'], backlogTaskIds: ['c'] });
+  });
+});
+
 describe('moveTasksBacklog: result', () => {
   it('reports moved and unchanged IDs', async () => {
     const res = await move(['a', 'c'], 'backlog');

@@ -19,6 +19,10 @@ The system SHALL provide a `move_tasks_backlog` tool taking `task_ids` and a `de
 - **WHEN** tasks `b` and `a`, in that order, are moved to a backlog that already holds `c`
 - **THEN** the backlog is `c`, `b`, `a`
 
+#### Scenario: Task in both lists is repaired
+- **WHEN** a task is in both the regular list and the backlog of its project and is moved to either destination
+- **THEN** the task is in exactly one list, the destination, and appears in `moved`
+
 #### Scenario: Bulk move across projects
 - **WHEN** `move_tasks_backlog` is called with tasks from several projects
 - **THEN** every task is moved within its own project

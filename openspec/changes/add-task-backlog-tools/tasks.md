@@ -1,6 +1,6 @@
 ## 1. Plugin
 
-- [x] 1.1 Add `moveTasksBacklog` case to plugin/plugin.js: load tasks and projects, validate whole batch (exists, top-level, has project, project exists, `isEnableBacklog` when destination is `backlog`, task in one of the two lists), re-read projects, write `taskIds`/`backlogTaskIds` once per project via `PluginAPI.updateProject`; return `{ moved, unchanged }`
+- [x] 1.1 Add `moveTasksBacklog` case to plugin/plugin.js: load tasks and projects, validate whole batch (exists, top-level, has project, project exists, `isEnableBacklog` when destination is `backlog`, task in one of the two lists) from one snapshot, write `taskIds`/`backlogTaskIds` once per project via `PluginAPI.updateProject`; return `{ moved, unchanged }`
 - [x] 1.2 Add backlog guard to the `reorderTasks` case (`contextType: 'project'`): reject IDs found in the project's `backlogTaskIds`
 - [x] 1.3 Bump `PLUGIN_VERSION` in plugin/plugin.js and `version` in plugin/manifest.json to 1.8.0
 
