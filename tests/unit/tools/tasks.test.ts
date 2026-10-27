@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock sendCommand before importing the module under test
 vi.mock('../../../src/ipc/command-sender.js', () => ({
@@ -13,6 +13,7 @@ import {
   updateTaskSchema,
   createTaskWithSubtasksSchema,
   bulkUpdateTasksSchema,
+  moveTasksBacklogSchema,
   logTimeSchema,
   registerTaskTools,
 } from '../../../src/tools/tasks.js';
@@ -456,6 +457,53 @@ describe('task tool logic', () => {
       const res = await sendCommand(dirs, 'reorderTasks', { taskIds: ['t1', 'foreign-task'], contextId: 'proj-1', contextType: 'project' });
       expect(res.success).toBe(false);
       expect(res.error).toMatch('does not belong to context');
+    });
+  });
+
+  // Spec: openspec/changes/add-task-backlog-tools/specs/task-backlog/spec.md
+  describe('move_tasks_backlog', () => {
+    // These tests fail until the tool exists; reset so unconsumed Once-values can't leak into later tests.
+    afterEach(() => mockSend.mockReset());
+
+    it('sends moveTasksBacklog with taskIds and destination (via real handler)', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({ moved: ['t1', 't2'], unchanged: [] }));
+      const res = await toolHandlers.get('move_tasks_backlog')!({ task_ids: ['t1', 't2'], destination: 'backlog' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'moveTasksBacklog', { taskIds: ['t1', 't2'], destination: 'backlog' });
+      expect(JSON.stringify(res)).toContain('unchanged');
+    });
+
+    it('passes destination regular through', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({ moved: ['t1'], unchanged: [] }));
+      await toolHandlers.get('move_tasks_backlog')!({ task_ids: ['t1'], destination: 'regular' });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'moveTasksBacklog', { taskIds: ['t1'], destination: 'regular' });
+    });
+
+    it('returns an error result for empty task_ids without sending a command', async () => {
+      const res = (await toolHandlers.get('move_tasks_backlog')!({ task_ids: [], destination: 'backlog' })) as { isError?: boolean };
+      expect(res.isError).toBe(true);
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it('surfaces a plugin error as an error result', async () => {
+      mockSend.mockResolvedValueOnce({ success: false, error: 'Project inbox has its backlog disabled', timestamp: Date.now() });
+      const res = (await toolHandlers.get('move_tasks_backlog')!({ task_ids: ['t1'], destination: 'backlog' })) as { isError?: boolean; content: { text: string }[] };
+      expect(res.isError).toBe(true);
+      expect(res.content[0].text).toContain('backlog disabled');
+    });
+
+    describe('schema', () => {
+      it('accepts 1 to 100 task_ids and both destinations', () => {
+        expect(moveTasksBacklogSchema.safeParse({ task_ids: ['a'], destination: 'backlog' }).success).toBe(true);
+        expect(moveTasksBacklogSchema.safeParse({ task_ids: Array(100).fill('a'), destination: 'regular' }).success).toBe(true);
+      });
+      it('rejects empty and over-100 task_ids', () => {
+        expect(moveTasksBacklogSchema.safeParse({ task_ids: [], destination: 'backlog' }).success).toBe(false);
+        expect(moveTasksBacklogSchema.safeParse({ task_ids: Array(101).fill('a'), destination: 'backlog' }).success).toBe(false);
+      });
+      it('rejects an invalid destination and unknown parameters', () => {
+        expect(moveTasksBacklogSchema.safeParse({ task_ids: ['a'], destination: 'archive' }).success).toBe(false);
+        expect(moveTasksBacklogSchema.safeParse({ task_ids: ['a'], destination: 'backlog', extra: 1 }).success).toBe(false);
+      });
     });
   });
 
