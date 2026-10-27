@@ -28,7 +28,7 @@ Each group writes failing tests first, then the implementation (red → green).
 
 - [x] 5.1 Update the README tool table to list `priority` on the four tools; verify the rows match the schemas.
 - [x] 5.2 Run `make verify` (typecheck + lint + test) and verify it passes.
-- [ ] 5.3 Manually verify against a live SP instance after `make`: set, change, clear priority via `update_task`; create with priority via `create_task` and `create_task_with_subtasks`; bulk update with one bad id. Resolve the design Open Question on `priority: null`.
+- [x] 5.3 Manually verify against a live SP instance after `make`: set, change, clear priority via `update_task`; create with priority via `create_task` and `create_task_with_subtasks`; bulk update with one bad id. Resolve the design Open Question on `priority: null`.
 
 ## Workflow follow-up
 

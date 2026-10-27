@@ -37,6 +37,6 @@ Current shape in `src/tools/tasks.ts`: shared raw-shape schemas feed strict `z.o
 - [Mocked tests miss `addTask` dropping the field] → Plugin test asserts the follow-up `updateTask` call, like the existing `deadlineDay` test.
 - [Strict schemas: any client already sending `priority` was rejected before, now accepted] → No migration needed; this only widens accepted input.
 
-## Open Questions
+## Resolved Questions
 
-- Does SP's `updateTask` persist `priority: null` as cleared (vs. leaving a stale value)? Answerable during live verification; if it fails, the clear path switches to `undefined`/delete semantics without changing the spec.
+- Does SP's `updateTask` persist `priority: null` as cleared? Yes. Verified against live SP 2026-10-27: a cleared task reads back `priority: null`, while a task created without priority has no `priority` key. Both satisfy the spec's "`null` or absent".
