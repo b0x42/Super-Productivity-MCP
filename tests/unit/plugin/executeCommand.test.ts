@@ -454,3 +454,61 @@ describe('executeCommand: deleteProject', () => {
     expect(res.error).toBe('boom');
   });
 });
+
+describe('executeCommand: priority follow-up on create', () => {
+  beforeEach(() => {
+    globalThis.PluginAPI = {
+      addTask: vi.fn().mockResolvedValue('task-1'),
+      updateTask: vi.fn().mockResolvedValue(undefined),
+      getTasks: vi.fn(),
+      deleteTask: vi.fn(),
+    };
+  });
+
+  const priorityCalls = () =>
+    globalThis.PluginAPI.updateTask.mock.calls.filter(([, patch]) => patch && 'priority' in patch);
+
+  it('addTask persists priority via a follow-up updateTask (addTask itself drops it)', async () => {
+    const res = await executeCommand({ action: 'addTask', data: { title: 'T', priority: 3 } });
+    expect(res.success).toBe(true);
+    expect(globalThis.PluginAPI.updateTask).toHaveBeenCalledWith('task-1', { priority: 3 });
+  });
+
+  it.each([undefined, null])('addTask makes no priority follow-up when priority is %s', async (priority) => {
+    await executeCommand({ action: 'addTask', data: { title: 'T', ...(priority === null && { priority }) } });
+    expect(priorityCalls()).toHaveLength(0);
+  });
+
+  it('createTaskWithSubtasks sets parent and subtask priorities, none for entries without one', async () => {
+    globalThis.PluginAPI.addTask
+      .mockResolvedValueOnce('parent')
+      .mockResolvedValueOnce('sub-1')
+      .mockResolvedValueOnce('sub-2');
+    const res = await executeCommand({
+      action: 'createTaskWithSubtasks',
+      data: { title: 'P', priority: 3, subtasks: [{ title: 'a', priority: 1 }, { title: 'b' }] },
+    });
+    expect(res.success).toBe(true);
+    expect(res.result).toEqual({ parentId: 'parent', subtaskIds: ['sub-1', 'sub-2'] });
+    expect(priorityCalls()).toEqual([
+      ['parent', { priority: 3 }],
+      ['sub-1', { priority: 1 }],
+    ]);
+  });
+
+  it('reports the failing task and created ids when a priority write fails, without deleting anything', async () => {
+    globalThis.PluginAPI.addTask.mockResolvedValueOnce('parent').mockResolvedValueOnce('sub-1');
+    globalThis.PluginAPI.updateTask
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('boom'));
+    const res = await executeCommand({
+      action: 'createTaskWithSubtasks',
+      data: { title: 'P', priority: 3, subtasks: [{ title: 'a', priority: 1 }] },
+    });
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('sub-1');
+    expect(res.error).toContain('parent');
+    expect(res.error).toContain('boom');
+    expect(globalThis.PluginAPI.deleteTask).not.toHaveBeenCalled();
+  });
+});

@@ -135,10 +135,10 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 
 | Tool | Description |
 |------|-------------|
-| `create_task` | Create a task (supports SP short syntax) |
-| `create_task_with_subtasks` | Create a parent task + subtasks in one operation |
+| `create_task` | Create a task (supports SP short syntax), optionally with `priority` (1 Low, 2 Medium, 3 High) |
+| `create_task_with_subtasks` | Create a parent task + subtasks in one operation, with optional `priority` on the parent and each subtask |
 | `get_tasks` | List tasks — filter by project, tag, done, archived, search (title+notes), `parents_only`, `overdue`, `unscheduled`, `planned_for_today`, `recurring_only`, `fields` |
-| `update_task` | Update title, notes, done state, due date, deadline, `planned_at`, timed schedule (`due_with_time`) and reminder (`remind_at`) ⚠️ [limited](#known-limitations), time estimate, tags |
+| `update_task` | Update title, notes, done state, due date, deadline, `priority` (1–3, `null` clears), `planned_at`, timed schedule (`due_with_time`) and reminder (`remind_at`) ⚠️ [limited](#known-limitations), time estimate, tags |
 | `complete_task` | Mark a task as complete |
 | `delete_task` | Permanently delete a task (parent deletes subtasks too). Archived tasks can't be deleted — SP's plugin API is read-only for the archive |
 | `start_task` | Start the time tracker on a task |
@@ -147,7 +147,7 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | `get_current_task` | Get the currently tracked task (null if none) |
 | `plan_tasks_for_today` | Batch plan/unplan tasks for today ⚠️ [limited](#known-limitations) |
 | `bulk_complete_tasks` | Mark multiple tasks complete in one operation |
-| `bulk_update_tasks` | Update multiple tasks in one operation |
+| `bulk_update_tasks` | Update multiple tasks in one operation (incl. `priority`) |
 | `add_tag_to_task` | Add a tag without replacing other tags |
 | `remove_tag_from_task` | Remove a single tag |
 | `move_task_to_project` | Move a top-level task to a different project |

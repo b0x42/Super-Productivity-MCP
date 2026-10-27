@@ -62,6 +62,11 @@ export function applyTriageFilters(
 // that silently wrote nothing. Nested array-item schemas (bulk_update_tasks'
 // `updates[]`, create_task's `subtasks[]`) get the same treatment for the same reason.
 
+// Shared by every tool that writes a task priority (issue #138). Numbers only — SP also
+// reads 'high'/'medium'/'low' strings, but one representation keeps the contract testable.
+const prioritySchema = z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional()
+  .describe('Task priority: 1 = Low, 2 = Medium, 3 = High. Pass null to clear. Omit to leave unchanged.');
+
 const createTaskShape = {
   title: z.string().describe('Task title. May include SP short syntax: #tag +project @due-date 30m'),
   notes: z.string().optional().describe('Task notes/description'),
@@ -69,6 +74,7 @@ const createTaskShape = {
   parent_id: z.string().optional().describe('Parent task ID for creating subtasks'),
   tag_ids: z.array(z.string()).optional().describe('Tag IDs to assign'),
   deadline_day: z.string().optional().describe('Deadline date in ISO format (e.g. 2026-04-20). Independent from due_day/planned_at.'),
+  priority: prioritySchema,
 };
 export const createTaskSchema = z.object(createTaskShape).strict();
 
@@ -94,6 +100,7 @@ const updateTaskShape = {
   is_done: z.boolean().optional().describe('Mark as done/undone'),
   due_day: z.string().optional().describe('Due date in ISO format (e.g. 2026-04-20), or empty string to clear'),
   deadline_day: z.string().optional().describe('Deadline date in ISO format (e.g. 2026-04-20), or empty string to clear. Independent from due_day/planned_at.'),
+  priority: prioritySchema,
   planned_at: z.number().nullable().optional().describe('Unix ms timestamp to plan task for a specific time (e.g. start of today = plan for today). Pass null to unplan. Independent from due_day.'),
   due_with_time: z.number().int().positive().nullable().optional().describe('Unix ms timestamp to schedule the task at a specific time (SP "dueWithTime"). Clears dueDay — SP keeps the two mutually exclusive — so it cannot be combined with due_day. Pass null to clear. Does not notify on its own; set remind_at for that.'),
   remind_at: z.number().int().positive().optional().describe('Unix ms timestamp at which SP fires a reminder notification for the task (SP "remindAt"), usually equal to or shortly before due_with_time. Clearing is not supported: SP\'s plugin API rejects a null remindAt.'),
@@ -141,6 +148,7 @@ const bulkUpdateTaskItemShape = {
   notes: z.string().optional().describe('New notes'),
   due_day: z.string().optional().describe('Due date (YYYY-MM-DD) or empty string to clear'),
   deadline_day: z.string().optional().describe('Deadline date (YYYY-MM-DD) or empty string to clear'),
+  priority: prioritySchema,
   tag_ids: z.array(z.string()).optional().describe('Replace all tags'),
   time_estimate: z.number().optional().describe('Time estimate in ms'),
 };
@@ -171,12 +179,14 @@ export const deleteTaskSchema = z.object(deleteTaskShape).strict();
 const subtaskItemSchema = z.object({
   title: z.string().describe('Subtask title'),
   notes: z.string().optional().describe('Subtask notes'),
+  priority: prioritySchema,
 }).strict();
 const createTaskWithSubtasksShape = {
   title: z.string().describe('Parent task title'),
   notes: z.string().optional().describe('Parent task notes'),
   project_id: z.string().optional().describe('Project ID for the parent task'),
   tag_ids: z.array(z.string()).optional().describe('Tag IDs for the parent task'),
+  priority: prioritySchema,
   subtasks: z.array(subtaskItemSchema).describe('Subtask definitions'),
 };
 export const createTaskWithSubtasksSchema = z.object(createTaskWithSubtasksShape).strict();
@@ -219,13 +229,15 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       description: 'Create a new task in Super Productivity. Supports SP short syntax in the title: #tag, +project (prefix match, min 3 chars), @due-date (e.g. @tomorrow, @friday 3pm), and time estimates (30m, 1h, 1h/2h for spent/estimate). Tasks without a project go to the Inbox.',
       inputSchema: createTaskSchema,
     },
-    async ({ title, notes, project_id, parent_id, tag_ids, deadline_day }) => {
+    async ({ title, notes, project_id, parent_id, tag_ids, deadline_day, priority }) => {
       if (!title?.trim()) return errorResult('Title is required');
 
       const data: Record<string, unknown> = { title, notes: notes ?? '', tagIds: tag_ids ?? [] };
       if (project_id) data.projectId = project_id;
       if (parent_id) data.parentId = parent_id;
       if (deadline_day !== undefined) data.deadlineDay = deadline_day || null;
+      // null on create means 'no priority', which is already the default — send nothing.
+      if (priority != null) data.priority = priority;
 
       // SP auto-assigns plannedAt/dueDay to today when viewing Today context.
       // Passing null satisfies SP's `'dueDay' in additional` guard, preventing auto-scheduling
@@ -307,7 +319,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       description: 'Update an existing task. Supports SP short syntax in the title. Time spent is not settable here — SP derives it from the per-day worklog, so use log_time.',
       inputSchema: updateTaskSchema,
     },
-    async ({ task_id, title, notes, is_done, due_day, deadline_day, planned_at, due_with_time, remind_at, time_estimate, tag_ids }) => {
+    async ({ task_id, title, notes, is_done, due_day, deadline_day, priority, planned_at, due_with_time, remind_at, time_estimate, tag_ids }) => {
       if (!task_id?.trim()) return errorResult('task_id is required');
       if (due_with_time != null && due_day) {
         return errorResult('due_day and due_with_time are mutually exclusive — pass only one');
@@ -330,6 +342,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         if (due_day && due_with_time === undefined) data.dueWithTime = null;
       }
       if (deadline_day !== undefined) data.deadlineDay = deadline_day || null;
+      if (priority !== undefined) data.priority = priority;
       if (planned_at !== undefined) data.plannedAt = planned_at;
       // Same mutual exclusivity SP's own scheduleTaskWithTime reducer enforces:
       // setting dueWithTime clears dueDay.
@@ -468,6 +481,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
           ...(u.notes !== undefined && { notes: u.notes }),
           ...(u.due_day !== undefined && { dueDay: u.due_day || null }),
           ...(u.deadline_day !== undefined && { deadlineDay: u.deadline_day || null }),
+          ...(u.priority !== undefined && { priority: u.priority }),
           ...(u.tag_ids !== undefined && { tagIds: u.tag_ids }),
           ...(u.time_estimate !== undefined && { timeEstimate: u.time_estimate }),
         },
@@ -532,7 +546,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       description: 'Create a parent task with subtasks in one operation. Returns parentId and subtaskIds.',
       inputSchema: createTaskWithSubtasksSchema,
     },
-    async ({ title, notes, project_id, tag_ids, subtasks }) => {
+    async ({ title, notes, project_id, tag_ids, priority, subtasks }) => {
       if (!title?.trim()) return errorResult('Title is required');
       const data: Record<string, unknown> = {
         title,
@@ -541,6 +555,7 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
         tagIds: tag_ids ?? [],
         subtasks: subtasks ?? [],
       };
+      if (priority != null) data.priority = priority;
       const res = await sendCommand(dirs, 'createTaskWithSubtasks', { data });
       if (!res.success) return errorResult(res.error ?? 'Failed to create task with subtasks');
       return okResult(res.result);
