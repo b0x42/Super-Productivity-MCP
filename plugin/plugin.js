@@ -307,6 +307,17 @@ async function executeCommand(command) {
         if (result && 'deadlineDay' in d) {
           await PluginAPI.updateTask(result, { deadlineDay: d.deadlineDay });
         }
+        // Same silent-drop for priority. Only numbers need persisting — null/absent already
+        // means "no priority" on a fresh task.
+        // The task already exists by now, so a failure here names it — otherwise a caller
+        // retrying create_task would silently create a duplicate.
+        if (result && typeof d.priority === 'number') {
+          try {
+            await PluginAPI.updateTask(result, { priority: d.priority });
+          } catch (e) {
+            throw new Error(`Task ${result} was created but setting its priority failed: ${e.message || String(e)}`);
+          }
+        }
         break;
       }
       case 'getTasks': {
@@ -616,6 +627,21 @@ async function executeCommand(command) {
           tagIds: parentData.tagIds || [],
         });
         const subtaskIds = [];
+        // addTask() drops priority, so it is written with a follow-up updateTask. If that
+        // fails, the tasks created so far stay (no rollback) and the error names them so
+        // the caller can fix or delete them.
+        const setPriority = async (id, priority) => {
+          if (typeof priority !== 'number') return;
+          try {
+            await PluginAPI.updateTask(id, { priority });
+          } catch (e) {
+            throw new Error(
+              `Failed to set priority on ${id}: ${e.message || String(e)}. ` +
+              `Already created: parentId=${parentId}, subtaskIds=[${subtaskIds.join(', ')}]`
+            );
+          }
+        };
+        await setPriority(parentId, parentData.priority);
         for (const sub of (parentData.subtasks || [])) {
           const subId = await PluginAPI.addTask({
             title: sub.title,
@@ -623,6 +649,7 @@ async function executeCommand(command) {
             parentId,
           });
           subtaskIds.push(subId);
+          await setPriority(subId, sub.priority);
         }
         result = { parentId, subtaskIds };
         break;

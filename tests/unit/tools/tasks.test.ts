@@ -9,6 +9,7 @@ import { sendCommand } from '../../../src/ipc/command-sender.js';
 import {
   applyTriageFilters,
   localDateStr,
+  createTaskSchema,
   updateTaskSchema,
   createTaskWithSubtasksSchema,
   bulkUpdateTasksSchema,
@@ -1066,5 +1067,128 @@ describe('time_spent removal (007)', () => {
 
   it('bulk_update_tasks still accepts time_estimate', () => {
     expect(bulkUpdateTasksSchema.safeParse({ updates: [{ task_id: 't1', time_estimate: 5000 }] }).success).toBe(true);
+  });
+});
+
+describe('task priority (add-task-priority)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  describe('schema value domain', () => {
+    it.each([1, 2, 3, null])('update_task accepts priority %s', (priority) => {
+      expect(updateTaskSchema.safeParse({ task_id: 't1', priority }).success).toBe(true);
+    });
+
+    it.each([4, 0, 'high', 1.5])('update_task rejects priority %s naming the field', (priority) => {
+      const result = updateTaskSchema.safeParse({ task_id: 't1', priority });
+      expect(result.success).toBe(false);
+      if (!result.success) expect(JSON.stringify(result.error.issues)).toContain('priority');
+    });
+
+    it('create_task rejects an out-of-range priority', () => {
+      expect(createTaskSchema.safeParse({ title: 'x', priority: 4 }).success).toBe(false);
+    });
+
+    it('rejects the whole bulk_update_tasks call when one item has an invalid priority', () => {
+      const result = bulkUpdateTasksSchema.safeParse({
+        updates: [{ task_id: 't1', priority: 2 }, { task_id: 't2', priority: 4 }],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) expect(JSON.stringify(result.error.issues)).toContain('priority');
+    });
+
+    it('rejects the whole create_task_with_subtasks call when one subtask has an invalid priority', () => {
+      const result = createTaskWithSubtasksSchema.safeParse({
+        title: 'Plan',
+        subtasks: [{ title: 'a', priority: 1 }, { title: 'b', priority: 9 }],
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('update_task handler', () => {
+    it.each([1, 2, 3])('sets priority %s', async (priority) => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await toolHandlers.get('update_task')!({ task_id: 't1', priority });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', { taskId: 't1', data: { priority } });
+    });
+
+    it('clears priority with null', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await toolHandlers.get('update_task')!({ task_id: 't1', priority: null });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'updateTask', { taskId: 't1', data: { priority: null } });
+    });
+
+    it('leaves priority out of data when omitted', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({}));
+      await toolHandlers.get('update_task')!({ task_id: 't1', title: 'Renamed' });
+      const data = (mockSend.mock.calls[0][2] as { data: Record<string, unknown> }).data;
+      expect('priority' in data).toBe(false);
+    });
+  });
+
+  describe('create_task handler', () => {
+    it('sends priority in the command data', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse('task-1'));
+      await toolHandlers.get('create_task')!({ title: 'Test', priority: 3 });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'addTask', {
+        data: expect.objectContaining({ priority: 3 }),
+      });
+    });
+
+    it('omits priority from data when not given', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse('task-1'));
+      await toolHandlers.get('create_task')!({ title: 'Test' });
+      const data = (mockSend.mock.calls[0][2] as { data: Record<string, unknown> }).data;
+      expect('priority' in data).toBe(false);
+    });
+
+    it('accepts null and sends no priority', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse('task-1'));
+      const res = await toolHandlers.get('create_task')!({ title: 'Test', priority: null });
+      expect((res as { isError?: boolean }).isError).toBeFalsy();
+      const data = (mockSend.mock.calls[0][2] as { data: Record<string, unknown> }).data;
+      expect('priority' in data).toBe(false);
+    });
+  });
+
+  describe('bulk_update_tasks handler', () => {
+    it('maps priority per item independently, including null', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({ results: [] }));
+      await toolHandlers.get('bulk_update_tasks')!({
+        updates: [
+          { task_id: 't1', priority: 3 },
+          { task_id: 't2', priority: null },
+          { task_id: 't3', title: 'x' },
+        ],
+      });
+      expect(mockSend).toHaveBeenCalledWith(dirs, 'bulkUpdateTasks', {
+        updates: [
+          { taskId: 't1', data: { priority: 3 } },
+          { taskId: 't2', data: { priority: null } },
+          { taskId: 't3', data: { title: 'x' } },
+        ],
+      });
+    });
+  });
+
+  describe('create_task_with_subtasks handler', () => {
+    it('passes parent and subtask priorities through on the right entries', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({ parentId: 'p', subtaskIds: ['a', 'b'] }));
+      await toolHandlers.get('create_task_with_subtasks')!({
+        title: 'Plan',
+        priority: 3,
+        subtasks: [{ title: 'a', priority: 1 }, { title: 'b' }],
+      });
+      const data = (mockSend.mock.calls[0][2] as { data: Record<string, unknown> }).data;
+      expect(data.priority).toBe(3);
+      expect(data.subtasks).toEqual([{ title: 'a', priority: 1 }, { title: 'b' }]);
+    });
+
+    it('omits parent priority when not given', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({ parentId: 'p', subtaskIds: [] }));
+      await toolHandlers.get('create_task_with_subtasks')!({ title: 'Plan', subtasks: [] });
+      const data = (mockSend.mock.calls[0][2] as { data: Record<string, unknown> }).data;
+      expect('priority' in data).toBe(false);
+    });
   });
 });

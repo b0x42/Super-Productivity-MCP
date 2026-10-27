@@ -135,41 +135,41 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 
 | Tool | Description |
 |------|-------------|
-| `create_task` | Create a task (supports SP short syntax) |
-| `create_task_with_subtasks` | Create a parent task + subtasks in one operation |
-| `get_tasks` | List tasks — filter by project, tag, done, archived, search (title+notes), `parents_only`, `overdue`, `unscheduled`, `planned_for_today`, `recurring_only`, `fields` |
-| `update_task` | Update title, notes, done state, due date, deadline, `planned_at`, timed schedule (`due_with_time`) and reminder (`remind_at`) ⚠️ [limited](#known-limitations), time estimate, tags |
+| `add_tag_to_task` | Add a tag without replacing other tags |
+| `bulk_complete_tasks` | Mark multiple tasks complete in one operation |
+| `bulk_update_tasks` | Update multiple tasks in one operation (incl. `priority`) |
+| `check_connection` | Verify SP is running and the plugin is responding |
+| `check_habit` | Check off a habit for a day (increments that day's value, defaults to today) |
 | `complete_task` | Mark a task as complete |
+| `create_habit` | Create a habit (streak-tracked click counter) |
+| `create_project` | Create a new project |
+| `create_tag` | Create a new tag |
+| `create_task` | Create a task (supports SP short syntax), optionally with `priority` (1 Low, 2 Medium, 3 High) |
+| `create_task_with_subtasks` | Create a parent task + subtasks in one operation, with optional `priority` on the parent and each subtask |
+| `debug_directories` | Show resolved data directory paths |
+| `delete_habit` | Permanently delete a habit |
+| `delete_project` | Permanently delete a project and all tasks it contains. Cannot delete the Inbox |
 | `delete_task` | Permanently delete a task (parent deletes subtasks too). Archived tasks can't be deleted — SP's plugin API is read-only for the archive |
+| `get_current_task` | Get the currently tracked task (null if none) |
+| `get_habits` | List all habits, including each one's computed streak length |
+| `get_projects` | List all projects |
+| `get_tags` | List all tags |
+| `get_task_repeat_cfgs` | List all recurring task configurations (schedule, cadence, day-of-week settings) |
+| `get_tasks` | List tasks — filter by project, tag, done, archived, search (title+notes), `parents_only`, `overdue`, `unscheduled`, `planned_for_today`, `recurring_only`, `fields` |
+| `get_worklog` | Time tracking summary for a date range |
+| `log_time` | Log time spent on a task — one day, or several at once via `entries` for backfill. Adds to each day's tracked time, or overwrites with `mode: "set"` |
+| `move_task_to_project` | Move a top-level task to a different project |
+| `plan_tasks_for_today` | Batch plan/unplan tasks for today ⚠️ [limited](#known-limitations) |
+| `remove_tag_from_task` | Remove a single tag |
+| `reorder_tasks` | Reorder tasks within a project or parent |
+| `set_habit_value` | Set a habit's exact value for a day — backfill or correct history |
+| `show_notification` | Show a snackbar in SP's UI |
 | `start_task` | Start the time tracker on a task |
 | `stop_task` | Stop the currently running time tracker |
-| `log_time` | Log time spent on a task — one day, or several at once via `entries` for backfill. Adds to each day's tracked time, or overwrites with `mode: "set"` |
-| `get_current_task` | Get the currently tracked task (null if none) |
-| `plan_tasks_for_today` | Batch plan/unplan tasks for today ⚠️ [limited](#known-limitations) |
-| `bulk_complete_tasks` | Mark multiple tasks complete in one operation |
-| `bulk_update_tasks` | Update multiple tasks in one operation |
-| `add_tag_to_task` | Add a tag without replacing other tags |
-| `remove_tag_from_task` | Remove a single tag |
-| `move_task_to_project` | Move a top-level task to a different project |
-| `reorder_tasks` | Reorder tasks within a project or parent |
-| `get_projects` | List all projects |
-| `create_project` | Create a new project |
-| `update_project` | Update project properties |
-| `delete_project` | Permanently delete a project and all tasks it contains. Cannot delete the Inbox |
-| `get_tags` | List all tags |
-| `create_tag` | Create a new tag |
-| `update_tag` | Update tag properties |
-| `get_task_repeat_cfgs` | List all recurring task configurations (schedule, cadence, day-of-week settings) |
-| `create_habit` | Create a habit (streak-tracked click counter) |
-| `get_habits` | List all habits, including each one's computed streak length |
 | `update_habit` | Update habit title, icon, enabled state, or streak config |
-| `check_habit` | Check off a habit for a day (increments that day's value, defaults to today) |
-| `set_habit_value` | Set a habit's exact value for a day — backfill or correct history |
-| `delete_habit` | Permanently delete a habit |
-| `get_worklog` | Time tracking summary for a date range |
-| `show_notification` | Show a snackbar in SP's UI |
-| `check_connection` | Verify SP is running and the plugin is responding |
-| `debug_directories` | Show resolved data directory paths |
+| `update_project` | Update project properties |
+| `update_tag` | Update tag properties |
+| `update_task` | Update title, notes, done state, due date, deadline, `priority` (1–3, `null` clears), `planned_at`, timed schedule (`due_with_time`) and reminder (`remind_at`) ⚠️ [limited](#known-limitations), time estimate, tags |
 
 Habit tools (`create_habit`, `get_habits`, `update_habit`, `check_habit`, `set_habit_value`, `delete_habit`) require a Super Productivity build newer than the `14.0.0` minimum above — on older builds they return a clear "requires a newer version" error instead of failing silently.
 
@@ -235,6 +235,7 @@ Include these in task titles and they are parsed automatically:
 | `@due time` | `Call @tomorrow 3pm` | Sets due date and time |
 | `30m` | `Quick fix 30m` | Sets 30-minute time estimate |
 | `1h/2h` | `Research 1h/2h` | Sets 1h spent, 2h estimate |
+| `p1` / `p2` / `p3` | `Fix bug p1` | Sets priority: p1 = High, p2 = Medium, p3 = Low (`create_task` only). Opposite order from the `priority` parameter, where 3 = High |
 
 ## Troubleshooting
 
