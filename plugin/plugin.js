@@ -309,8 +309,14 @@ async function executeCommand(command) {
         }
         // Same silent-drop for priority. Only numbers need persisting — null/absent already
         // means "no priority" on a fresh task.
+        // The task already exists by now, so a failure here names it — otherwise a caller
+        // retrying create_task would silently create a duplicate.
         if (result && typeof d.priority === 'number') {
-          await PluginAPI.updateTask(result, { priority: d.priority });
+          try {
+            await PluginAPI.updateTask(result, { priority: d.priority });
+          } catch (e) {
+            throw new Error(`Task ${result} was created but setting its priority failed: ${e.message || String(e)}`);
+          }
         }
         break;
       }

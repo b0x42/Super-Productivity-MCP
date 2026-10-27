@@ -496,6 +496,49 @@ describe('executeCommand: priority follow-up on create', () => {
     ]);
   });
 
+  it('addTask reports the created id when the priority follow-up fails, so a retry does not duplicate the task', async () => {
+    // First updateTask is addTask's plannedAt/dueDay reset; the priority write is the second.
+    globalThis.PluginAPI.updateTask
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('boom'));
+    const res = await executeCommand({ action: 'addTask', data: { title: 'T', priority: 3 } });
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('task-1');
+    expect(res.error).toContain('boom');
+    expect(globalThis.PluginAPI.deleteTask).not.toHaveBeenCalled();
+  });
+
+  it('createTaskWithSubtasks skips the parent follow-up when the parent priority is null', async () => {
+    globalThis.PluginAPI.addTask.mockResolvedValueOnce('parent').mockResolvedValueOnce('sub-1');
+    await executeCommand({
+      action: 'createTaskWithSubtasks',
+      data: { title: 'P', priority: null, subtasks: [{ title: 'a', priority: 2 }] },
+    });
+    expect(priorityCalls()).toEqual([['sub-1', { priority: 2 }]]);
+  });
+
+  it('bulkUpdateTasks applies priority to valid ids and reports "Task not found" for a bad one', async () => {
+    globalThis.PluginAPI.getTasks.mockResolvedValue([{ id: 't1' }, { id: 't2' }]);
+    const res = await executeCommand({
+      action: 'bulkUpdateTasks',
+      updates: [
+        { taskId: 't1', data: { priority: 3 } },
+        { taskId: 'bad', data: { priority: 2 } },
+        { taskId: 't2', data: { priority: null } },
+      ],
+    });
+    expect(res.success).toBe(true);
+    expect(res.result.results).toEqual([
+      { id: 't1', success: true },
+      { id: 'bad', success: false, error: 'Task not found: bad' },
+      { id: 't2', success: true },
+    ]);
+    expect(priorityCalls()).toEqual([
+      ['t1', { priority: 3 }],
+      ['t2', { priority: null }],
+    ]);
+  });
+
   it('reports the failing task and created ids when a priority write fails, without deleting anything', async () => {
     globalThis.PluginAPI.addTask.mockResolvedValueOnce('parent').mockResolvedValueOnce('sub-1');
     globalThis.PluginAPI.updateTask
