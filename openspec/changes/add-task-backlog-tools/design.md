@@ -22,10 +22,10 @@ See proposal.md - Why. Findings from SP source (super-productivity/super-product
 
 - **One bulk tool `move_tasks_backlog({ task_ids, destination })`** instead of two single-task tools: one read and one write per project, smaller race window, fewer tools. Departs from the issue's naming; noted on the issue.
 - **Read-modify-write via `updateProject`**: proven by prior art, no unverified APIs. Re-read `getAllProjects()` right before writing to keep the race with SP-side changes (e.g. issue-provider imports) small. Not atomic; accepted.
-- **Validate whole batch before any write**: a failing ID aborts with no writes (same rule as `reorderTasks`). Checks: task exists; top-level (no `parentId`); has `projectId`; project exists; `isEnableBacklog` true; task is in `taskIds` or `backlogTaskIds` of its project.
+- **Validate whole batch before any write**: a failing ID aborts with no writes (same rule as `reorderTasks`). Checks: task exists; top-level (no `parentId`); has `projectId`; project exists; `isEnableBacklog` true when the destination is `backlog`; task is in `taskIds` or `backlogTaskIds` of its project.
 - **Idempotent**: task already in the destination list is a successful no-op, reported in the result as unchanged.
 - **Destination `backlog`**: remove from `taskIds`, append to `backlogTaskIds`. **Destination `regular`**: remove from `backlogTaskIds`, append to `taskIds`.
-- **`isEnableBacklog` false is an error for both directions**: a no-op would hide the problem from the assistant.
+- **`isEnableBacklog` false is an error only for destination `backlog`**: the task would vanish from the UI. Destination `regular` stays allowed so tasks stranded in a disabled backlog can be recovered. An error rather than a no-op, so the problem is visible to the assistant.
 - **`reorderTasks` guard**: after existing validation, fetch the project and reject any ID in `backlogTaskIds` with a message pointing to `move_tasks_backlog`. Applies only to `contextType: 'project'`.
 - **Result shape**: `{ success: true, moved: string[], unchanged: string[] }`.
 

@@ -6,7 +6,7 @@ A Super Productivity project has two task lists: the regular list (`taskIds`) an
 
 - New tool `move_tasks_backlog`: moves one or more top-level tasks into a project's backlog or back to its regular list (`destination: 'backlog' | 'regular'`). Covers the issue's `move_task_to_backlog` / `move_task_out_of_backlog` plus bulk variants in one tool.
 - New plugin command `moveTasksBacklog`: groups tasks by project, validates the whole batch, then rewrites `taskIds` and `backlogTaskIds` with one `PluginAPI.updateProject` call per project.
-- Refuse moves in projects where `isEnableBacklog` is false (the UI hides such a backlog, so the task would disappear).
+- Refuse moves into the backlog of a project where `isEnableBacklog` is false (the UI hides such a backlog, so the task would disappear); moves to the regular list stay allowed.
 - `reorder_tasks` (plugin side): reject task IDs that are in the project's `backlogTaskIds`, instead of creating a duplicate.
 - Plugin version bump 1.7.0 → 1.8.0.
 
