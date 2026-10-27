@@ -3,7 +3,7 @@ const PROTOCOL_VERSION = 1;
 // Kept in step with plugin/manifest.json by tests/unit/plugin/version.test.ts —
 // this was a literal in the ping handler and check_connection reported 1.6.0
 // from a 1.7.0 plugin for a whole release.
-const PLUGIN_VERSION = '1.7.0';
+const PLUGIN_VERSION = '1.8.0';
 const POLL_INTERVAL_MS = 2000;
 let commandDir = null;
 let responseDir = null;
@@ -434,6 +434,61 @@ async function executeCommand(command) {
         result = null;
         break;
       }
+      case 'moveTasksBacklog': {
+        // Moves top-level tasks between a project's taskIds and backlogTaskIds by rewriting both
+        // arrays via updateProject (no dedicated PluginAPI method). The whole batch is validated
+        // against one fresh snapshot before any write; writes are one updateProject per project.
+        const { destination } = command;
+        const ids = [...new Set(command.taskIds || [])];
+        const fail = (error) => ({ success: false, error, timestamp: Date.now() });
+        if (destination !== 'backlog' && destination !== 'regular') {
+          return fail(`Invalid destination: ${destination}`);
+        }
+        const allTasksForBacklog = await PluginAPI.getTasks();
+        const projectsForBacklog = await PluginAPI.getAllProjects();
+        const plan = new Map(); // projectId -> { project, ids: [] }
+        const unchanged = [];
+        for (const id of ids) {
+          const task = allTasksForBacklog.find(t => t.id === id);
+          if (!task) return fail(`Task not found: ${id}`);
+          if (task.parentId) return fail(`Cannot move subtask: ${id} has parentId ${task.parentId}`);
+          if (!task.projectId) return fail(`Task ${id} has no project, so it has no backlog`);
+          const project = projectsForBacklog.find(p => p.id === task.projectId);
+          if (!project) return fail(`Project not found: ${task.projectId} (task ${id})`);
+          const inRegular = (project.taskIds || []).includes(id);
+          const inBacklogList = (project.backlogTaskIds || []).includes(id);
+          if (!inRegular && !inBacklogList) {
+            return fail(`Task ${id} is in neither the regular list nor the backlog of project ${project.id}`);
+          }
+          const alreadyThere = destination === 'backlog' ? inBacklogList : inRegular && !inBacklogList;
+          if (alreadyThere) {
+            unchanged.push(id);
+            continue;
+          }
+          if (destination === 'backlog' && !project.isEnableBacklog) {
+            return fail(`Project ${project.id} has its backlog disabled; moving task ${id} there would make it invisible in the SP UI`);
+          }
+          if (!plan.has(project.id)) plan.set(project.id, { project, ids: [] });
+          plan.get(project.id).ids.push(id);
+        }
+        const moved = [];
+        const writtenProjects = [];
+        for (const { project, ids: projectIds } of plan.values()) {
+          const without = (list) => (list || []).filter(x => !projectIds.includes(x));
+          const taskIds = destination === 'backlog' ? without(project.taskIds) : [...without(project.taskIds), ...projectIds];
+          const backlogTaskIds = destination === 'backlog' ? [...without(project.backlogTaskIds), ...projectIds] : without(project.backlogTaskIds);
+          try {
+            await PluginAPI.updateProject(project.id, { taskIds, backlogTaskIds });
+          } catch (e) {
+            const done = writtenProjects.length ? writtenProjects.join(', ') : 'none';
+            return fail(`Failed to update project ${project.id}: ${e.message || String(e)}. Projects already written: ${done}`);
+          }
+          writtenProjects.push(project.id);
+          moved.push(...projectIds);
+        }
+        result = { moved, unchanged };
+        break;
+      }
       case 'reorderTasks': {
         // Validate ALL taskIds belong to contextId before calling reorderTasks —
         // partial apply would silently corrupt the order (spec edge case requirement).
@@ -444,6 +499,17 @@ async function executeCommand(command) {
           const belongsToContext = t && (contextType === 'parent' ? t.parentId === contextId : t.projectId === contextId);
           if (!belongsToContext) {
             return { success: false, error: `Task ${id} does not belong to context ${contextId}`, timestamp: Date.now() };
+          }
+        }
+        // PluginAPI.reorderTasks assumes regular-list tasks only: a backlog task passes its
+        // projectId check and would be added to taskIds while staying in backlogTaskIds.
+        if (contextType === 'project') {
+          const projectsForReorder = await PluginAPI.getAllProjects();
+          const projectForReorder = projectsForReorder.find(p => p.id === contextId);
+          const backlogIds = (projectForReorder && projectForReorder.backlogTaskIds) || [];
+          const inBacklog = taskIds.find(id => backlogIds.includes(id));
+          if (inBacklog) {
+            return { success: false, error: `Task ${inBacklog} is in the backlog of project ${contextId}; use move_tasks_backlog to move it to the regular list first`, timestamp: Date.now() };
           }
         }
         // PluginAPI uses 'task' not 'parent' for subtask context

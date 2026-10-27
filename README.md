@@ -159,9 +159,10 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | `get_worklog` | Time tracking summary for a date range |
 | `log_time` | Log time spent on a task — one day, or several at once via `entries` for backfill. Adds to each day's tracked time, or overwrites with `mode: "set"` |
 | `move_task_to_project` | Move a top-level task to a different project |
+| `move_tasks_backlog` | Move up to 100 top-level tasks between a project's regular list and its backlog (`destination: "backlog"` or `"regular"`). Validates the whole batch first; refuses moves into a backlog-disabled project (e.g. Inbox) |
 | `plan_tasks_for_today` | Batch plan/unplan tasks for today ⚠️ [limited](#known-limitations) |
 | `remove_tag_from_task` | Remove a single tag |
-| `reorder_tasks` | Reorder tasks within a project or parent |
+| `reorder_tasks` | Reorder tasks within a project or parent. Rejects backlog tasks — use `move_tasks_backlog` |
 | `set_habit_value` | Set a habit's exact value for a day — backfill or correct history |
 | `show_notification` | Show a snackbar in SP's UI |
 | `start_task` | Start the time tracker on a task |

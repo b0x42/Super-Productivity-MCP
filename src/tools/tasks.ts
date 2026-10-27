@@ -164,6 +164,12 @@ const moveTaskToProjectShape = {
 };
 export const moveTaskToProjectSchema = z.object(moveTaskToProjectShape).strict();
 
+const moveTasksBacklogShape = {
+  task_ids: z.array(z.string()).min(1).max(100).describe('IDs of top-level tasks to move (1-100)'),
+  destination: z.enum(['backlog', 'regular']).describe('"backlog" moves tasks into their project\'s backlog; "regular" moves them back to the regular list'),
+};
+export const moveTasksBacklogSchema = z.object(moveTasksBacklogShape).strict();
+
 const reorderTasksShape = {
   task_ids: z.array(z.string()).describe('Complete ordered list of task IDs'),
   context_id: z.string().describe('Project ID (if context_type is "project") or parent task ID (if "parent")'),
@@ -508,11 +514,26 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
     },
   );
 
+  // move_tasks_backlog — move top-level tasks between a project's regular list and backlog
+  server.registerTool(
+    'move_tasks_backlog',
+    {
+      description: 'Move top-level tasks between their project\'s regular list and its backlog (1-100 task_ids, destination "backlog" or "regular"). Tasks are appended to the destination list in the given order. The whole batch is validated first; moving into the backlog of a project with the backlog disabled (e.g. Inbox) is refused. Returns { moved, unchanged }.',
+      inputSchema: moveTasksBacklogSchema,
+    },
+    async ({ task_ids, destination }) => {
+      if (!task_ids?.length) return errorResult('task_ids must not be empty');
+      const res = await sendCommand(dirs, 'moveTasksBacklog', { taskIds: task_ids, destination });
+      if (!res.success) return errorResult(res.error ?? 'Failed to move tasks');
+      return okResult(res.result);
+    },
+  );
+
   // reorder_tasks (FR-009 — reorder tasks within a project or parent)
   server.registerTool(
     'reorder_tasks',
     {
-      description: 'Reorder tasks within a project or subtasks within a parent task. Provide a complete ordered list of task IDs — partial reordering is not supported.',
+      description: 'Reorder tasks within a project or subtasks within a parent task. Provide a complete ordered list of task IDs — partial reordering is not supported. Backlog tasks are rejected; use move_tasks_backlog first.',
       inputSchema: reorderTasksSchema,
     },
     async ({ task_ids, context_id, context_type }) => {

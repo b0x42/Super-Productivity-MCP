@@ -14,6 +14,8 @@ export interface Command {
   taskIds?: string[];
   contextId?: string;
   contextType?: 'project' | 'parent';
+  // Field for moveTasksBacklog (taskIds shared with reorderTasks)
+  destination?: 'backlog' | 'regular';
   // Fields for bulkUpdateTasks (003-FR-009)
   updates?: Array<{ taskId: string; data: Record<string, unknown> }>;
 }
