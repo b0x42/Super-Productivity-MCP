@@ -18,5 +18,5 @@
 
 ## 4. Verification
 
-- [ ] 4.1 Manually verify against a running Super Productivity: move to and from backlog, check task shows in the right list and in exactly one
-- [ ] 4.2 Run `openspec validate add-task-backlog-tools --strict` and fix any reported issues
+- [x] 4.1 Manually verify against a running Super Productivity: move to and from backlog, check task shows in the right list and in exactly one
+- [x] 4.2 Run `openspec validate add-task-backlog-tools --strict` and fix any reported issues
