@@ -15,7 +15,7 @@ export function cleanStaleFiles(dirs: ResolvedDirs): void {
   for (const dir of [dirs.commands, dirs.responses]) {
     if (!existsSync(dir)) continue;
     for (const file of readdirSync(dir)) {
-      if (!file.endsWith('.json')) continue;
+      if (!file.endsWith('.json') && !file.endsWith('.json.tmp')) continue;
       try {
         const filePath = join(dir, file);
         const stat = statSync(filePath);

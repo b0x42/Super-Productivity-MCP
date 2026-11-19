@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdirSync, writeFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readdirSync, existsSync, statSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { sendCommand, cleanStaleFiles } from '../../src/ipc/command-sender.js';
@@ -69,5 +69,22 @@ describe('cleanStaleFiles', () => {
 
     cleanStaleFiles(dirs);
     expect(existsSync(recentPath)).toBe(true);
+  });
+});
+
+describe('cleanStaleFiles: orphaned .tmp', () => {
+  it('removes stale *.json.tmp files and keeps fresh ones', () => {
+    const dirs = makeDirs();
+    const old = new Date(Date.now() - 10 * 60 * 1000);
+    const stale = join(dirs.responses, 'x_response.json.tmp');
+    const fresh = join(dirs.responses, 'y_response.json.tmp');
+    writeFileSync(stale, '{}');
+    writeFileSync(fresh, '{}');
+    utimesSync(stale, old, old);
+
+    cleanStaleFiles(dirs);
+
+    expect(existsSync(stale)).toBe(false);
+    expect(existsSync(fresh)).toBe(true);
   });
 });

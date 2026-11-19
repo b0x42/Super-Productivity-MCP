@@ -5,9 +5,17 @@ const PROTOCOL_VERSION = 1;
 // from a 1.7.0 plugin for a whole release.
 const PLUGIN_VERSION = '1.8.0';
 const POLL_INTERVAL_MS = 2000;
+// Matches the server's sendCommand timeout: past this nobody is waiting for the response.
+const COMMAND_TIMEOUT_MS = 30000;
 let commandDir = null;
 let responseDir = null;
 let pollTimer = null;
+// Bumped on every (re)start/stop so an in-flight cycle from a previous run cannot re-arm the timer.
+let pollGeneration = 0;
+// True while a pollCommands cycle runs, including one left over from before a re-init.
+let polling = false;
+// Command files that ran but could not be deleted; skipped so they do not re-run every cycle.
+const handledCommands = new Set();
 let lastProcessed = 0;
 let currentTrackedTask = null;
 
@@ -63,7 +71,7 @@ function parseAtDateSyntax(title, now = new Date()) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseAtDateSyntax, executeCommand, PLUGIN_VERSION };
+  module.exports = { parseAtDateSyntax, executeCommand, init, stopPolling, pollCommands, PLUGIN_VERSION };
 }
 
 // Set one or more days in a timeSpentOnDay map and recompute the derived total.
@@ -226,7 +234,9 @@ async function writeResponse(commandId, response) {
         if (op === 'start') {
           fs.writeFileSync(tmpPath, '', { mode: 0o600 });
         } else if (op === 'append') {
-          fs.appendFileSync(tmpPath, args[3], 'utf-8');
+          fs.appendFileSync(tmpPath, args[3], { encoding: 'utf-8', mode: 0o600 });
+        } else if (op === 'abort') {
+          try { fs.unlinkSync(tmpPath); } catch (e) {}
         } else if (op === 'finish') {
           try { fs.unlinkSync(filePath); } catch (e) {}
           fs.renameSync(tmpPath, filePath);
@@ -241,11 +251,26 @@ async function writeResponse(commandId, response) {
     assertNodeResult(result, 'writeResponse ' + op);
   };
 
-  await runWriteStep('start');
-  for (let i = 0; i < payload.length; i += chunkSize) {
-    await runWriteStep('append', payload.slice(i, i + chunkSize));
+  try {
+    await runWriteStep('start');
+    for (let i = 0; i < payload.length; i += chunkSize) {
+      await runWriteStep('append', payload.slice(i, i + chunkSize));
+    }
+    await runWriteStep('finish');
+  } catch (e) {
+    // Do not leave a partial .tmp behind; best effort, the sweeps catch it later.
+    try { await runWriteStep('abort'); } catch (_) {}
+    throw e;
   }
-  await runWriteStep('finish');
+}
+
+// Rejects if fn takes longer than ms, so one hung PluginAPI call cannot stall the poll loop.
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(label + ' timed out after ' + ms + 'ms')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 async function deleteFile(filePath) {
@@ -832,7 +857,8 @@ async function executeCommand(command) {
 }
 
 async function pollCommands() {
-  if (!commandDir) return;
+  if (!commandDir || polling) return;
+  polling = true;
   try {
     const result = await PluginAPI.executeNodeScript({
       script: `
@@ -862,8 +888,12 @@ async function pollCommands() {
     if (!r || !r.success || !r.commands) return;
     for (const cmd of r.commands) {
       const cmdId = cmd.data.id || cmd.file.replace('.json', '');
+      if (handledCommands.has(cmd.path)) {
+        try { await deleteFile(cmd.path); handledCommands.delete(cmd.path); } catch (e) {}
+        continue;
+      }
       try {
-        const response = await executeCommand(cmd.data);
+        const response = await withTimeout(executeCommand(cmd.data), COMMAND_TIMEOUT_MS, 'Command ' + (cmd.data && cmd.data.action));
         await writeResponse(cmdId, response);
       } catch (e) {
         console.error('Command processing failed (' + (cmd.data && cmd.data.action) + '):', e);
@@ -876,15 +906,39 @@ async function pollCommands() {
         await deleteFile(cmd.path);
       } catch (e) {
         console.error('deleteFile failed:', e);
+        handledCommands.add(cmd.path);
       }
     }
   } catch (e) {
     console.error('Poll error:', e);
+  } finally {
+    polling = false;
   }
 }
 
+// Re-arm only after a cycle finishes. setInterval fired pollCommands again while a slow
+// command was still being written, which re-ran the command and put two writers on one
+// response .tmp file.
+async function pollLoop(generation) {
+  try {
+    await pollCommands();
+  } finally {
+    if (generation === pollGeneration) {
+      pollTimer = setTimeout(() => pollLoop(generation), POLL_INTERVAL_MS);
+    }
+  }
+}
+
+function stopPolling() {
+  pollGeneration++;
+  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+}
+
 async function init() {
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  // Claim the generation up front: overlapping init() calls each get their own, and only
+  // the latest one may start a loop after its awaits.
+  stopPolling();
+  const generation = ++pollGeneration;
   await setupDirectories();
   // FR-020: Clean stale files on startup (>5min old)
   await PluginAPI.executeNodeScript({
@@ -894,7 +948,7 @@ async function init() {
       const now = Date.now();
       for (const dir of [args[0], args[1]]) {
         try {
-          for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json'))) {
+          for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json') || f.endsWith('.json.tmp'))) {
             const fp = path.join(dir, f);
             if (now - fs.statSync(fp).mtimeMs > 300000) fs.unlinkSync(fp);
           }
@@ -905,7 +959,8 @@ async function init() {
     args: [commandDir, responseDir],
     timeout: 5000,
   });
-  pollTimer = setInterval(pollCommands, POLL_INTERVAL_MS);
+  if (generation !== pollGeneration) return;
+  pollTimer = setTimeout(() => pollLoop(generation), POLL_INTERVAL_MS);
   console.log('MCP Bridge Plugin initialized', { commandDir, responseDir });
 }
 
