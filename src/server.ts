@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { resolveDirectories, type ResolvedDirs } from './ipc/directories.js';
 import { cleanStaleFiles } from './ipc/command-sender.js';
 import { registerTaskTools } from './tools/tasks.js';
+import { registerAttachmentTools } from './tools/attachments.js';
 import { registerProjectTools } from './tools/projects.js';
 import { registerTagTools } from './tools/tags.js';
 import { registerHabitTools } from './tools/habits.js';
@@ -42,6 +43,7 @@ export function createServer(): { server: McpServer; dirs: ResolvedDirs } {
   const recording = instrumentServer(server, createRecorder(dirs));
 
   registerTaskTools(recording, dirs);
+  registerAttachmentTools(recording, dirs);
   registerProjectTools(recording, dirs);
   registerTagTools(recording, dirs);
   registerHabitTools(recording, dirs);

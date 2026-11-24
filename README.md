@@ -136,6 +136,7 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | Tool | Description |
 |------|-------------|
 | `add_tag_to_task` | Add a tag without replacing other tags |
+| `add_task_attachment` | Attach a local file/folder (absolute path, `~/…`, `file://…`) or a URL to a task, so it appears in SP's attachment list instead of in the notes. Type is inferred (FILE / LINK / IMG); idempotent per path |
 | `bulk_complete_tasks` | Mark multiple tasks complete in one operation |
 | `bulk_update_tasks` | Update multiple tasks in one operation (incl. `priority`) |
 | `check_connection` | Verify SP is running and the plugin is responding |
@@ -162,6 +163,7 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | `move_tasks_backlog` | Move up to 100 top-level tasks between a project's regular list and its backlog (`destination: "backlog"` or `"regular"`). Validates the whole batch first; refuses moves into a backlog-disabled project (e.g. Inbox) |
 | `plan_tasks_for_today` | Batch plan/unplan tasks for today ⚠️ [limited](#known-limitations) |
 | `remove_tag_from_task` | Remove a single tag |
+| `remove_task_attachment` | Remove one attachment from a task, by `attachment_id` or `path` (the file itself is untouched) |
 | `reorder_tasks` | Reorder tasks within a project or parent. Rejects backlog tasks — use `move_tasks_backlog` |
 | `set_habit_value` | Set a habit's exact value for a day — backfill or correct history |
 | `show_notification` | Show a snackbar in SP's UI |
