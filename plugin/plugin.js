@@ -432,6 +432,56 @@ async function executeCommand(command) {
         result = null;
         break;
       }
+      case 'addTaskAttachment': {
+        // Read-modify-write like addTagToTask: updateTask replaces the whole attachments
+        // list, so the current one has to be read first. The server builds and validates
+        // the attachment (type, absolute path, icon, id); this only appends it.
+        const att = command.data && command.data.attachment;
+        if (!att || typeof att.path !== 'string' || !att.path || typeof att.id !== 'string') {
+          return { success: false, error: 'addTaskAttachment needs data.attachment with id and path', timestamp: Date.now() };
+        }
+        const allTasksForAttach = await PluginAPI.getTasks();
+        const taskForAttach = allTasksForAttach.find(t => t.id === command.taskId);
+        if (!taskForAttach) {
+          const archivedError = await archivedTaskError(command.taskId);
+          return { success: false, error: archivedError || `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+        const currentAttachments = taskForAttach.attachments || [];
+        // Same de-duplication by path SP applies to URLs parsed from task titles.
+        const existing = currentAttachments.find(a => a.path === att.path);
+        if (existing) {
+          result = { attachmentId: existing.id, attachment: existing, alreadyAttached: true };
+          break;
+        }
+        const attachment = { id: att.id, type: att.type, path: att.path, title: att.title, icon: att.icon };
+        await PluginAPI.updateTask(command.taskId, { attachments: [...currentAttachments, attachment] });
+        result = { attachmentId: attachment.id, attachment, alreadyAttached: false };
+        break;
+      }
+      case 'removeTaskAttachment': {
+        const d = command.data || {};
+        const allTasksForDetach = await PluginAPI.getTasks();
+        const taskForDetach = allTasksForDetach.find(t => t.id === command.taskId);
+        if (!taskForDetach) {
+          const archivedError = await archivedTaskError(command.taskId);
+          return { success: false, error: archivedError || `Task not found: ${command.taskId}`, timestamp: Date.now() };
+        }
+        const attachmentsBefore = taskForDetach.attachments || [];
+        const matches = d.attachmentId
+          ? (a => a.id === d.attachmentId)
+          : (a => a.path === d.path);
+        const removed = attachmentsBefore.filter(matches);
+        if (removed.length === 0) {
+          return {
+            success: false,
+            error: `Task ${command.taskId} has no attachment ${d.attachmentId ? 'with id ' + d.attachmentId : 'with path ' + d.path}`,
+            timestamp: Date.now(),
+          };
+        }
+        await PluginAPI.updateTask(command.taskId, { attachments: attachmentsBefore.filter(a => !matches(a)) });
+        result = { removed };
+        break;
+      }
       case 'loadCurrentTask': {
         // Cannot use registerHook('currentTaskChange') — it breaks plugin polling.
         // Instead, scan tasks for active timer via currentTimestamp field.
