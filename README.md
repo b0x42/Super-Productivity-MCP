@@ -145,7 +145,7 @@ The plugin to upload to Super Productivity is at `dist/plugin.zip` after `npm ru
 | `create_project` | Create a new project |
 | `create_tag` | Create a new tag |
 | `create_task` | Create a task (supports SP short syntax), optionally with `priority` (1 Low, 2 Medium, 3 High) |
-| `create_task_with_subtasks` | Create a parent task + subtasks in one operation, with optional `priority` on the parent and each subtask |
+| `create_task_with_subtasks` | Create a parent task + subtasks in one operation, with optional `priority` on the parent and each subtask, and optional `due_day` / `deadline_day` / `planned_at` on the parent |
 | `debug_directories` | Show resolved data directory paths |
 | `delete_habit` | Permanently delete a habit |
 | `delete_project` | Permanently delete a project and all tasks it contains. Cannot delete the Inbox |
