@@ -118,6 +118,19 @@ function missingHabitApiError() {
 // real reason and say where deletion is possible. Probed defensively: older SP
 // builds may not expose the archive at all, and a failure here must not turn a
 // clear error into a thrown one.
+// SP 20 stores the running timer once, as task.currentTaskId in app state. Probed
+// defensively like archivedTaskError: a build without getAppState, or with a different
+// state shape, must yield null (fall back to the currentTimestamp scan), not throw.
+async function getCurrentTaskIdFromAppState() {
+  if (typeof PluginAPI.getAppState !== 'function') return null;
+  try {
+    const state = await PluginAPI.getAppState();
+    return (state && state.task && state.task.currentTaskId) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function archivedTaskError(taskId) {
   if (typeof PluginAPI.getArchivedTasks !== 'function') return null;
   try {
@@ -434,9 +447,13 @@ async function executeCommand(command) {
       }
       case 'loadCurrentTask': {
         // Cannot use registerHook('currentTaskChange') — it breaks plugin polling.
-        // Instead, scan tasks for active timer via currentTimestamp field.
+        // SP 20 keeps the running timer in app state (task.currentTaskId), not in a
+        // per-task currentTimestamp field, so the scan alone always found nothing there.
+        // Read the app state first; keep the scan as a fallback for older SP builds.
         const allTasksCurrent = await PluginAPI.getTasks();
-        const active = allTasksCurrent.find(t => t.currentTimestamp > 0) || null;
+        const currentId = await getCurrentTaskIdFromAppState();
+        const active = (currentId && allTasksCurrent.find(t => t.id === currentId))
+          || allTasksCurrent.find(t => t.currentTimestamp > 0) || null;
         result = active ? { id: active.id, title: active.title, isDone: active.isDone, projectId: active.projectId, parentId: active.parentId, tagIds: active.tagIds, dueDay: active.dueDay } : null;
         break;
       }
@@ -585,9 +602,9 @@ async function executeCommand(command) {
         break;
       }
       case 'startTask': {
-        // PluginAPI has no native timer control method, and dispatchAction has a whitelist
-        // that doesn't include task actions. Instead, we use updateTask to set currentTimestamp
-        // which is how SP internally tracks the active timer.
+        // Newer SP builds expose native timer control (PluginAPI.startTracking/stopTracking),
+        // which sets task.currentTaskId and runs SP's real timer. Older builds lack it, so
+        // the fallback below writes currentTimestamp via updateTask — SP 20 ignores that field.
         const allTasksForStart = await PluginAPI.getTasks();
         const taskForStart = allTasksForStart.find(t => t.id === command.taskId);
         if (!taskForStart) {
@@ -595,6 +612,12 @@ async function executeCommand(command) {
         }
         if (taskForStart.isDone) {
           return { success: false, error: `Cannot start tracking a completed task: ${command.taskId}`, timestamp: Date.now() };
+        }
+        if (typeof PluginAPI.startTracking === 'function') {
+          // Switches away from any running task itself.
+          await PluginAPI.startTracking(command.taskId);
+          result = null;
+          break;
         }
         // Stop any currently running task first
         const currentlyTracked = allTasksForStart.find(t => t.currentTimestamp > 0 && t.id !== command.taskId);
@@ -606,7 +629,13 @@ async function executeCommand(command) {
         break;
       }
       case 'stopTask': {
-        // Find the currently tracked task and clear its currentTimestamp.
+        if (typeof PluginAPI.stopTracking === 'function') {
+          // Idempotent: SP just sets the current task id to null.
+          await PluginAPI.stopTracking();
+          result = null;
+          break;
+        }
+        // Fallback for older SP: find the tracked task and clear its currentTimestamp.
         const allTasksForStop = await PluginAPI.getTasks();
         const tracked = allTasksForStop.find(t => t.currentTimestamp > 0);
         if (tracked) {
