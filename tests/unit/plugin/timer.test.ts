@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { executeCommand } from '../../../plugin/plugin.js';
+import { executeCommand, onCurrentTaskChange } from '../../../plugin/plugin.js';
 
 // executeCommand reads the global PluginAPI SP injects at runtime; tests stub it directly.
 declare global {
@@ -22,6 +22,7 @@ const tasks = [
 
 describe('executeCommand: loadCurrentTask', () => {
   beforeEach(() => {
+    onCurrentTaskChange(null); // module-level hook state: reset between tests
     globalThis.PluginAPI = {
       addTask: vi.fn(),
       updateTask: vi.fn(),
@@ -40,6 +41,28 @@ describe('executeCommand: loadCurrentTask', () => {
     globalThis.PluginAPI.getAppState = vi.fn().mockResolvedValue({ task: { currentTaskId: null } });
     const res = await executeCommand({ action: 'loadCurrentTask' });
     expect(res.result).toBeNull();
+  });
+
+  it('uses the currentTaskChange hook when app state has no currentTaskId (SP 20.1+ snapshot)', async () => {
+    globalThis.PluginAPI.getAppState = vi.fn().mockResolvedValue({ tasks: {}, projects: {} });
+    onCurrentTaskChange({ current: { id: 't1' }, previous: null });
+    const res = await executeCommand({ action: 'loadCurrentTask' });
+    expect(res.result).toMatchObject({ id: 't1', title: 'One' });
+  });
+
+  it('returns null after the hook reports the timer stopped', async () => {
+    globalThis.PluginAPI.getAppState = vi.fn().mockResolvedValue({ tasks: {} });
+    onCurrentTaskChange({ current: { id: 't1' } });
+    onCurrentTaskChange({ current: null, previous: { id: 't1' } });
+    const res = await executeCommand({ action: 'loadCurrentTask' });
+    expect(res.result).toBeNull();
+  });
+
+  it('prefers raw app state over the hook when both are present (SP 20.0.x)', async () => {
+    globalThis.PluginAPI.getAppState = vi.fn().mockResolvedValue({ task: { currentTaskId: 't2' } });
+    onCurrentTaskChange({ current: { id: 't1' } });
+    const res = await executeCommand({ action: 'loadCurrentTask' });
+    expect(res.result).toMatchObject({ id: 't2' });
   });
 
   it('falls back to the currentTimestamp scan when getAppState is unavailable', async () => {

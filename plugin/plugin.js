@@ -71,7 +71,7 @@ function parseAtDateSyntax(title, now = new Date()) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseAtDateSyntax, executeCommand, init, stopPolling, pollCommands, PLUGIN_VERSION };
+  module.exports = { parseAtDateSyntax, executeCommand, init, stopPolling, pollCommands, onCurrentTaskChange, PLUGIN_VERSION };
 }
 
 // Set one or more days in a timeSpentOnDay map and recompute the derived total.
@@ -112,15 +112,30 @@ function missingHabitApiError() {
   return missing.length ? 'Habit management requires a newer version of Super Productivity.' : null;
 }
 
-// PluginAPI exposes getArchivedTasks() for reading but nothing that removes from
-// the archive, so an archived task can be seen and never deleted. Reporting it as
-// "not found" is misleading for a task get_tasks will happily return — name the
-// real reason and say where deletion is possible. Probed defensively: older SP
-// builds may not expose the archive at all, and a failure here must not turn a
-// clear error into a thrown one.
-// SP 20 stores the running timer once, as task.currentTaskId in app state. Probed
-// defensively like archivedTaskError: a build without getAppState, or with a different
-// state shape, must yield null (fall back to the currentTimestamp scan), not throw.
+// SP 20 tracks the running timer once, as task.currentTaskId — no task carries the old
+// currentTimestamp field. How a plugin can read it depends on the SP version:
+// - SP 20.0.x: getAppState() returns the raw store, so state.task.currentTaskId is there.
+// - SP 20.1+: getAppState() returns a curated snapshot without it, and PluginAPI has no
+//   getter for the tracked task. The currentTaskChange hook (what SP's bundled
+//   app-auto-track plugin uses) is the only live source; it fires on changes only.
+// undefined = no hook event seen since the plugin loaded (unknown), null = nothing tracked.
+let hookCurrentTaskId;
+
+function onCurrentTaskChange(payload) {
+  hookCurrentTaskId = (payload && payload.current && payload.current.id) || null;
+}
+
+function registerCurrentTaskHook() {
+  if (typeof PluginAPI.registerHook !== 'function') return;
+  try {
+    PluginAPI.registerHook('currentTaskChange', onCurrentTaskChange);
+  } catch (e) {
+    console.error('registerHook(currentTaskChange) failed:', e);
+  }
+}
+
+// Probed defensively like archivedTaskError: a build without getAppState, or with a
+// different state shape, must yield null rather than throw.
 async function getCurrentTaskIdFromAppState() {
   if (typeof PluginAPI.getAppState !== 'function') return null;
   try {
@@ -131,6 +146,12 @@ async function getCurrentTaskIdFromAppState() {
   }
 }
 
+// PluginAPI exposes getArchivedTasks() for reading but nothing that removes from
+// the archive, so an archived task can be seen and never deleted. Reporting it as
+// "not found" is misleading for a task get_tasks will happily return — name the
+// real reason and say where deletion is possible. Probed defensively: older SP
+// builds may not expose the archive at all, and a failure here must not turn a
+// clear error into a thrown one.
 async function archivedTaskError(taskId) {
   if (typeof PluginAPI.getArchivedTasks !== 'function') return null;
   try {
@@ -446,12 +467,10 @@ async function executeCommand(command) {
         break;
       }
       case 'loadCurrentTask': {
-        // Cannot use registerHook('currentTaskChange') — it breaks plugin polling.
-        // SP 20 keeps the running timer in app state (task.currentTaskId), not in a
-        // per-task currentTimestamp field, so the scan alone always found nothing there.
-        // Read the app state first; keep the scan as a fallback for older SP builds.
+        // Sources in order (see hookCurrentTaskId): raw app state (SP 20.0.x), the
+        // currentTaskChange hook (SP 20.1+), then the currentTimestamp scan (older SP).
         const allTasksCurrent = await PluginAPI.getTasks();
-        const currentId = await getCurrentTaskIdFromAppState();
+        const currentId = (await getCurrentTaskIdFromAppState()) || hookCurrentTaskId || null;
         const active = (currentId && allTasksCurrent.find(t => t.id === currentId))
           || allTasksCurrent.find(t => t.currentTimestamp > 0) || null;
         result = active ? { id: active.id, title: active.title, isDone: active.isDone, projectId: active.projectId, parentId: active.parentId, tagIds: active.tagIds, dueDay: active.dueDay } : null;
@@ -996,6 +1015,10 @@ async function init() {
 // onReady fires after SP confirms the Node.js IPC bridge is available (with retry).
 // Fall back to setTimeout for SP < 18.6.0 which lacks onReady.
 // Guarded so this file can be `require`d in a Node/test environment without a PluginAPI global.
+if (typeof PluginAPI !== 'undefined') {
+  // Once per plugin load, not per init(): re-inits would stack duplicate handlers.
+  registerCurrentTaskHook();
+}
 if (typeof PluginAPI !== 'undefined' && typeof PluginAPI.onReady === 'function') {
   PluginAPI.onReady(init);
 } else if (typeof PluginAPI !== 'undefined') {
