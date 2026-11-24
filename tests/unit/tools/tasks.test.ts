@@ -1238,5 +1238,46 @@ describe('task priority (add-task-priority)', () => {
       const data = (mockSend.mock.calls[0][2] as { data: Record<string, unknown> }).data;
       expect('priority' in data).toBe(false);
     });
+
+    it('sets parent dates with one follow-up updateTask on the new parent', async () => {
+      mockSend
+        .mockResolvedValueOnce(mockResponse({ parentId: 'p', subtaskIds: ['a'] }))
+        .mockResolvedValueOnce(mockResponse(null));
+      const res = await toolHandlers.get('create_task_with_subtasks')!({
+        title: 'Plan',
+        due_day: '2026-12-01',
+        deadline_day: '2026-12-05',
+        planned_at: 1764547200000,
+        subtasks: [{ title: 'a' }],
+      });
+      expect((res as { isError?: boolean }).isError).toBeFalsy();
+      expect(mockSend).toHaveBeenCalledTimes(2);
+      expect(mockSend.mock.calls[1]).toEqual([
+        dirs,
+        'updateTask',
+        { taskId: 'p', data: { dueDay: '2026-12-01', deadlineDay: '2026-12-05', plannedAt: 1764547200000 } },
+      ]);
+    });
+
+    it('does not send a follow-up updateTask when no dates are given', async () => {
+      mockSend.mockResolvedValueOnce(mockResponse({ parentId: 'p', subtaskIds: [] }));
+      await toolHandlers.get('create_task_with_subtasks')!({ title: 'Plan', subtasks: [] });
+      expect(mockSend).toHaveBeenCalledTimes(1);
+    });
+
+    it('names the already-created parent when setting dates fails', async () => {
+      mockSend
+        .mockResolvedValueOnce(mockResponse({ parentId: 'p', subtaskIds: [] }))
+        .mockResolvedValueOnce({ success: false, error: 'nope', timestamp: Date.now() });
+      const res = await toolHandlers.get('create_task_with_subtasks')!({
+        title: 'Plan',
+        due_day: '2026-12-01',
+        subtasks: [],
+      });
+      expect((res as { isError?: boolean }).isError).toBe(true);
+      const text = (res as { content: { text: string }[] }).content[0].text;
+      expect(text).toContain('Task p and its subtasks were created');
+      expect(text).toContain('nope');
+    });
   });
 });

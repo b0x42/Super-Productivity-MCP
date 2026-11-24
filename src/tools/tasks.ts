@@ -193,6 +193,9 @@ const createTaskWithSubtasksShape = {
   project_id: z.string().optional().describe('Project ID for the parent task'),
   tag_ids: z.array(z.string()).optional().describe('Tag IDs for the parent task'),
   priority: prioritySchema,
+  due_day: z.string().optional().describe('Parent due date in ISO format (e.g. 2026-04-20)'),
+  deadline_day: z.string().optional().describe('Parent deadline date in ISO format (e.g. 2026-04-20). Independent from due_day/planned_at.'),
+  planned_at: z.number().optional().describe('Unix ms timestamp to plan the parent for a specific time (e.g. start of today = plan for today). Independent from due_day.'),
   subtasks: z.array(subtaskItemSchema).describe('Subtask definitions'),
 };
 export const createTaskWithSubtasksSchema = z.object(createTaskWithSubtasksShape).strict();
@@ -564,10 +567,10 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
   server.registerTool(
     'create_task_with_subtasks',
     {
-      description: 'Create a parent task with subtasks in one operation. Returns parentId and subtaskIds.',
+      description: "Create a parent task with subtasks in one operation. Optionally sets the parent's due_day, deadline_day and planned_at. Returns parentId and subtaskIds.",
       inputSchema: createTaskWithSubtasksSchema,
     },
-    async ({ title, notes, project_id, tag_ids, priority, subtasks }) => {
+    async ({ title, notes, project_id, tag_ids, priority, due_day, deadline_day, planned_at, subtasks }) => {
       if (!title?.trim()) return errorResult('Title is required');
       const data: Record<string, unknown> = {
         title,
@@ -579,6 +582,24 @@ export function registerTaskTools(server: McpServer, dirs: ResolvedDirs): void {
       if (priority != null) data.priority = priority;
       const res = await sendCommand(dirs, 'createTaskWithSubtasks', { data });
       if (!res.success) return errorResult(res.error ?? 'Failed to create task with subtasks');
+
+      // The plugin's createTaskWithSubtasks only passes title/notes/projectId/tagIds to
+      // PluginAPI.addTask, so dates are written to the parent with a follow-up updateTask —
+      // an action the plugin already handles, so the plugin needs no change.
+      const dateData: Record<string, unknown> = {};
+      if (due_day) dateData.dueDay = due_day;
+      if (deadline_day) dateData.deadlineDay = deadline_day;
+      if (planned_at !== undefined) dateData.plannedAt = planned_at;
+      if (Object.keys(dateData).length > 0) {
+        const parentId = (res.result as { parentId?: string } | undefined)?.parentId;
+        const upd = await sendCommand(dirs, 'updateTask', { taskId: parentId, data: dateData });
+        if (!upd.success) {
+          // The tasks exist by now — say so, or a retrying caller creates duplicates.
+          return errorResult(
+            `Task ${parentId} and its subtasks were created, but setting dates failed: ${upd.error ?? 'unknown error'}. Fix with update_task; don't re-create.`,
+          );
+        }
+      }
       return okResult(res.result);
     },
   );
