@@ -71,7 +71,7 @@ function parseAtDateSyntax(title, now = new Date()) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseAtDateSyntax, executeCommand, init, stopPolling, pollCommands, PLUGIN_VERSION };
+  module.exports = { parseAtDateSyntax, executeCommand, init, stopPolling, pollCommands, onCurrentTaskChange, PLUGIN_VERSION };
 }
 
 // Set one or more days in a timeSpentOnDay map and recompute the derived total.
@@ -110,6 +110,40 @@ function missingHabitApiError() {
   const required = ['getAllSimpleCounters', 'getSimpleCounter', 'updateSimpleCounter', 'setSimpleCounterDate', 'deleteSimpleCounter', 'setCounter'];
   const missing = required.filter(fn => typeof PluginAPI[fn] !== 'function');
   return missing.length ? 'Habit management requires a newer version of Super Productivity.' : null;
+}
+
+// SP 20 tracks the running timer once, as task.currentTaskId — no task carries the old
+// currentTimestamp field. How a plugin can read it depends on the SP version:
+// - SP 20.0.x: getAppState() returns the raw store, so state.task.currentTaskId is there.
+// - SP 20.1+: getAppState() returns a curated snapshot without it, and PluginAPI has no
+//   getter for the tracked task. The currentTaskChange hook (what SP's bundled
+//   app-auto-track plugin uses) is the only live source; it fires on changes only.
+// undefined = no hook event seen since the plugin loaded (unknown), null = nothing tracked.
+let hookCurrentTaskId;
+
+function onCurrentTaskChange(payload) {
+  hookCurrentTaskId = (payload && payload.current && payload.current.id) || null;
+}
+
+function registerCurrentTaskHook() {
+  if (typeof PluginAPI.registerHook !== 'function') return;
+  try {
+    PluginAPI.registerHook('currentTaskChange', onCurrentTaskChange);
+  } catch (e) {
+    console.error('registerHook(currentTaskChange) failed:', e);
+  }
+}
+
+// Probed defensively like archivedTaskError: a build without getAppState, or with a
+// different state shape, must yield null rather than throw.
+async function getCurrentTaskIdFromAppState() {
+  if (typeof PluginAPI.getAppState !== 'function') return null;
+  try {
+    const state = await PluginAPI.getAppState();
+    return (state && state.task && state.task.currentTaskId) || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 // PluginAPI exposes getArchivedTasks() for reading but nothing that removes from
@@ -433,10 +467,12 @@ async function executeCommand(command) {
         break;
       }
       case 'loadCurrentTask': {
-        // Cannot use registerHook('currentTaskChange') — it breaks plugin polling.
-        // Instead, scan tasks for active timer via currentTimestamp field.
+        // Sources in order (see hookCurrentTaskId): raw app state (SP 20.0.x), the
+        // currentTaskChange hook (SP 20.1+), then the currentTimestamp scan (older SP).
         const allTasksCurrent = await PluginAPI.getTasks();
-        const active = allTasksCurrent.find(t => t.currentTimestamp > 0) || null;
+        const currentId = (await getCurrentTaskIdFromAppState()) || hookCurrentTaskId || null;
+        const active = (currentId && allTasksCurrent.find(t => t.id === currentId))
+          || allTasksCurrent.find(t => t.currentTimestamp > 0) || null;
         result = active ? { id: active.id, title: active.title, isDone: active.isDone, projectId: active.projectId, parentId: active.parentId, tagIds: active.tagIds, dueDay: active.dueDay } : null;
         break;
       }
@@ -585,9 +621,9 @@ async function executeCommand(command) {
         break;
       }
       case 'startTask': {
-        // PluginAPI has no native timer control method, and dispatchAction has a whitelist
-        // that doesn't include task actions. Instead, we use updateTask to set currentTimestamp
-        // which is how SP internally tracks the active timer.
+        // Newer SP builds expose native timer control (PluginAPI.startTracking/stopTracking),
+        // which sets task.currentTaskId and runs SP's real timer. Older builds lack it, so
+        // the fallback below writes currentTimestamp via updateTask — SP 20 ignores that field.
         const allTasksForStart = await PluginAPI.getTasks();
         const taskForStart = allTasksForStart.find(t => t.id === command.taskId);
         if (!taskForStart) {
@@ -595,6 +631,12 @@ async function executeCommand(command) {
         }
         if (taskForStart.isDone) {
           return { success: false, error: `Cannot start tracking a completed task: ${command.taskId}`, timestamp: Date.now() };
+        }
+        if (typeof PluginAPI.startTracking === 'function') {
+          // Switches away from any running task itself.
+          await PluginAPI.startTracking(command.taskId);
+          result = null;
+          break;
         }
         // Stop any currently running task first
         const currentlyTracked = allTasksForStart.find(t => t.currentTimestamp > 0 && t.id !== command.taskId);
@@ -606,7 +648,13 @@ async function executeCommand(command) {
         break;
       }
       case 'stopTask': {
-        // Find the currently tracked task and clear its currentTimestamp.
+        if (typeof PluginAPI.stopTracking === 'function') {
+          // Idempotent: SP just sets the current task id to null.
+          await PluginAPI.stopTracking();
+          result = null;
+          break;
+        }
+        // Fallback for older SP: find the tracked task and clear its currentTimestamp.
         const allTasksForStop = await PluginAPI.getTasks();
         const tracked = allTasksForStop.find(t => t.currentTimestamp > 0);
         if (tracked) {
@@ -967,6 +1015,10 @@ async function init() {
 // onReady fires after SP confirms the Node.js IPC bridge is available (with retry).
 // Fall back to setTimeout for SP < 18.6.0 which lacks onReady.
 // Guarded so this file can be `require`d in a Node/test environment without a PluginAPI global.
+if (typeof PluginAPI !== 'undefined') {
+  // Once per plugin load, not per init(): re-inits would stack duplicate handlers.
+  registerCurrentTaskHook();
+}
 if (typeof PluginAPI !== 'undefined' && typeof PluginAPI.onReady === 'function') {
   PluginAPI.onReady(init);
 } else if (typeof PluginAPI !== 'undefined') {
